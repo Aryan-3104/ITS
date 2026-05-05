@@ -104,6 +104,11 @@ ParkSmart/
    ```bash
    python -m app
    ```
+
+   **If that doesnt work** : 
+   ```bash
+    flask --app app:create_app run --debug --host 0.0.0.0 --port 5000
+   ```
    
    The API will run on `http://localhost:5000`.
 
