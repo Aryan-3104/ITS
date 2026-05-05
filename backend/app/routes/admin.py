@@ -1,0 +1,119 @@
+"""
+Admin API routes.
+"""
+import os
+from flask import Blueprint, request, jsonify
+from app.services.slot_service import SlotService
+from app.services.booking_service import BookingService
+from app.services.analytics_service import AnalyticsService
+from app.config import SlotStatus
+
+admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
+
+def check_admin_auth(f):
+    """Decorator to check admin authorization."""
+    from functools import wraps
+    
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        expected_token = f"Bearer {os.getenv('ADMIN_PASSWORD', 'admin123')}"
+        
+        if auth_header != expected_token:
+            return jsonify({"error": "Unauthorized"}), 401
+        
+        return f(*args, **kwargs)
+    
+    return decorated_function
+
+@admin_bp.route("/analytics", methods=["GET"])
+@check_admin_auth
+def get_analytics():
+    """Get analytics dashboard data."""
+    return jsonify({
+        "occupancy_rate": AnalyticsService.get_occupancy_rate(),
+        "today_revenue": AnalyticsService.get_today_revenue(),
+        "today_sessions": AnalyticsService.get_today_session_count(),
+        "hourly_revenue": AnalyticsService.get_hourly_revenue(),
+        "vehicle_type_breakdown": AnalyticsService.get_vehicle_type_breakdown(),
+    })
+
+@admin_bp.route("/slots/<slot_id>", methods=["PATCH"])
+@check_admin_auth
+def update_slot(slot_id):
+    """Update slot configuration."""
+    try:
+        data = request.json
+        
+        if "status" in data:
+            SlotService.update_slot_status(slot_id, data["status"])
+        
+        if "category" in data:
+            SlotService.update_slot_category(slot_id, data["category"])
+        
+        if "rate_per_hour" in data:
+            SlotService.update_slot_rate(slot_id, data["rate_per_hour"])
+        
+        slot = SlotService.get_slot(slot_id)
+        return jsonify(slot.to_dict()), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@admin_bp.route("/slots/<slot_id>/force-release", methods=["POST"])
+@check_admin_auth
+def force_release_slot(slot_id):
+    """Manually release a slot."""
+    try:
+        SlotService.update_slot_status(slot_id, SlotStatus.AVAILABLE)
+        return jsonify({"status": "released"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@admin_bp.route("/sessions", methods=["GET"])
+@check_admin_auth
+def get_sessions():
+    """Get paginated session log."""
+    limit = request.args.get("limit", 50, type=int)
+    offset = request.args.get("offset", 0, type=int)
+    date_from = request.args.get("date_from")
+    date_to = request.args.get("date_to")
+    vehicle_type = request.args.get("vehicle_type")
+    
+    sessions = AnalyticsService.get_session_log(
+        limit=limit,
+        offset=offset,
+        date_from=date_from,
+        date_to=date_to,
+        vehicle_type=vehicle_type,
+    )
+    
+    return jsonify(sessions)
+
+@admin_bp.route("/utilization-heatmap", methods=["GET"])
+@check_admin_auth
+def get_utilization_heatmap():
+    """Get slot utilization heatmap."""
+    days = request.args.get("days", 7, type=int)
+    heatmap = AnalyticsService.get_slot_utilization_heatmap(days=days)
+    return jsonify(heatmap)
+
+@admin_bp.route("/login", methods=["POST"])
+def admin_login():
+    """Simple admin login endpoint."""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"error": "Missing request body"}), 400
+        
+        password = data.get("password")
+        if not password:
+            return jsonify({"error": "Missing password field"}), 400
+        
+        expected = os.getenv("ADMIN_PASSWORD", "admin123")
+        
+        if password == expected:
+            return jsonify({"token": f"Bearer {password}", "success": True}), 200
+        else:
+            return jsonify({"error": "Invalid password"}), 401
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

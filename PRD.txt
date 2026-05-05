@@ -1,0 +1,409 @@
+﻿ParkSmart — Smart Parking System  |  PRD v1.0
+1. Project Overview
+
+
+ParkSmart is a fully software-based, real-time Smart Parking System designed as part of the Intelligent Transport Systems (ITS) curriculum. It addresses one of the most common urban traffic problems — vehicles circling to find parking — by providing a digital platform for real-time slot visibility, advance booking, peak-hour prediction, and seamless check-in/out via QR codes.
+1.1 Problem Statement
+In urban environments, an estimated 30% of traffic congestion is caused by drivers searching for available parking. The absence of real-time parking information leads to:
+* Increased fuel consumption and vehicle emissions
+* Wasted commuter time and frustration
+* Inefficient use of available parking infrastructure
+* Lack of data for city planners and parking lot administrators
+
+
+1.2 Proposed Solution
+ParkSmart simulates an end-to-end smart parking ecosystem with three distinct user roles — Driver, Admin, and System — interacting through a web interface backed by a REST API and a lightweight database. Key capabilities include live slot maps, advance reservations, auto-release timers, QR-based check-in/out, peak hour prediction, and an admin analytics dashboard.
+2. Goals & Scope
+2.1 Goals
+Goal Type
+	Description
+	Primary
+	Provide real-time visibility of parking slot availability to drivers
+	Primary
+	Enable advance booking with auto-release to prevent no-shows
+	Primary
+	Simulate QR-based check-in and check-out for frictionless parking
+	Secondary
+	Predict peak-hour occupancy using historical slot usage data
+	Secondary
+	Provide admin dashboard with occupancy analytics and revenue logs
+	Academic
+	Demonstrate ITS concepts: real-time transport data, congestion reduction, smart city integration
+	2.2 In Scope
+* Simulated parking lot with configurable slots (2-wheeler, 4-wheeler, EV, differently-abled)
+* Driver-facing web UI: slot map, booking, QR check-in/out
+* Admin panel: slot management, logs, analytics dashboard
+* Backend REST API with slot state management and booking logic
+* Auto-release mechanism for unclaimed reservations
+* Peak hour prediction chart (based on simulated historical data)
+* Digital receipt/token generation on booking
+* Revenue and occupancy analytics
+2.3 Out of Scope
+* Hardware sensors or IoT device integration
+* Mobile native application (iOS/Android)
+* Payment gateway integration (revenue is simulated)
+* Multi-location / multi-city parking network
+* Real-time navigation / GPS routing to parking
+3. User Roles & Personas
+
+
+Role
+	Who
+	Goal
+	Pain Point
+	Driver
+	Daily commuter or visitor arriving at the parking lot
+	Find and reserve a slot quickly without circling
+	No visibility into available slots before arrival
+	Admin
+	Parking lot manager or university facility staff
+	Monitor occupancy, manage slots, view revenue logs
+	Manual tracking of occupancy is error-prone and slow
+	System
+	Automated backend process
+	Auto-release timed-out bookings, update slot states
+	No equivalent in manual systems — this is a new capability
+	4. Feature Specifications
+4.1 Parking Slot Map (Live View)
+The core driver-facing screen showing a visual grid of all parking slots in real time.
+
+
+Attribute
+	Detail
+	Slot categories
+	2-Wheeler, 4-Wheeler, EV (Electric Vehicle), Differently-abled
+	Slot states
+	Available (Green), Occupied (Red), Reserved (Amber), Unavailable (Grey)
+	Update frequency
+	Real-time polling (every 10 seconds) or WebSocket push
+	Filter options
+	Filter by vehicle type; show only available slots
+	Nearest slot
+	Highlight nearest available slot to entry gate on request
+	
+
+4.2 Slot Reservation System
+Drivers can book a specific slot in advance for an upcoming arrival.
+
+
+Attribute
+	Detail
+	Booking inputs
+	Name, vehicle number, vehicle type, arrival time, slot selection
+	Hold duration
+	Slot held for 15 minutes post-arrival time (configurable by admin)
+	Auto-release
+	If driver does not check in within hold window, slot reverts to Available
+	Confirmation
+	Digital token with booking ID and QR code generated on confirmation
+	Cancellation
+	Driver can cancel up to 5 minutes before arrival time
+	
+
+4.3 QR Code Check-in / Check-out
+Simulates a gate-based QR scan system for frictionless entry and exit.
+
+
+* On booking confirmation, a unique QR code is generated (encoding booking ID + vehicle info)
+* Check-in: Driver scans QR → system validates booking → slot state changes to Occupied → timestamp recorded
+* Check-out: Driver scans QR at exit → system computes duration → generates receipt → slot released
+* Walk-in: Drivers without prior booking can check in directly if a slot is available (QR issued on spot)
+* All scan events are logged with timestamp for admin audit trail
+4.4 Auto-Release Logic
+Prevents slot hoarding and maximizes lot utilization.
+
+
+1. Reservation created — slot moves to Reserved state, countdown timer starts
+2. System polls every minute for expired reservations
+3. If arrival time + hold window has elapsed and no check-in recorded, booking is marked Expired
+4. Slot state reverts to Available and appears green on the live map
+5. Driver with expired booking cannot check in — must re-book if slot still available
+4.5 Revenue & Occupancy Analytics (Admin)
+Admin dashboard providing operational insights for parking lot management.
+Metric
+	Description
+	Occupancy Rate
+	% of slots occupied at any given time, shown as live gauge
+	Revenue Log
+	Simulated revenue per session (rate × duration), exportable as CSV
+	Daily Summary
+	Total sessions, avg duration, peak occupancy time for the day
+	Slot Utilization
+	Per-slot heatmap showing most/least used slots over last 7 days
+	Vehicle Type Mix
+	Pie/bar chart breaking down sessions by vehicle category
+	
+
+4.6 Peak Hour Prediction (Bonus Feature)
+Uses simulated historical occupancy data to predict busy periods and guide driver behaviour.
+* Historical data generated for the past 30 days (simulated at setup or seeded in DB)
+* Algorithm: Simple hourly average occupancy % per day-of-week (no ML required)
+* Output: Line chart showing predicted occupancy by hour for today/tomorrow
+* Driver-facing: Banner message such as "High demand expected between 9 AM – 11 AM — book early"
+* Admin-facing: Full weekly prediction grid to plan staffing and pricing
+
+
+4.7 Digital Token & Receipt Generation (Bonus Feature)
+Provides drivers with a self-contained parking token and end-of-session receipt.
+
+
+* Booking Token: PDF/HTML card with QR code, slot number, vehicle info, booking time, hold expiry
+* Exit Receipt: Duration of stay, simulated charges, entry/exit timestamps, transaction ID
+* Both documents are generated in-browser (no server-side PDF library required)
+
+
+4.8 Admin Slot Management
+Tools for the admin to configure and control the parking lot.
+
+
+* Add, disable, or re-enable individual slots
+* Change slot category (e.g., convert 4-wheeler bay to EV bay)
+* Set pricing rates per vehicle type (used for revenue simulation)
+* Set reservation hold window duration (default: 15 minutes)
+* View full session log with search and filter by date, vehicle, or slot
+* Manual override: force-release or force-occupy any slot
+5. Team Responsibilities
+
+
+
+
+Member
+	Domain
+	Core Features
+	Bonus Features
+	Member 1
+	Backend & API
+	REST API, slot state engine, booking logic, auto-release scheduler
+	Peak hour prediction algorithm, revenue calculation logic
+	Member 2
+	Frontend — Driver UI
+	Slot map (live grid), booking form, QR check-in/out UI, walk-in flow
+	Peak hour chart, digital token & receipt generation (in-browser)
+	Member 3
+	Admin Panel & DB
+	Admin dashboard, slot management UI, session log viewer
+	Occupancy heatmap, weekly prediction grid, CSV export
+	6. Recommended Tech Stack
+
+
+Layer
+	Technology
+	Rationale
+	Frontend
+	React.js + Tailwind CSS
+	Component-based UI ideal for live slot grid; Tailwind enables rapid styling
+	Charts
+	Chart.js or Recharts
+	Lightweight, easy integration for occupancy and prediction charts
+	QR Code
+	qrcode.js (frontend lib)
+	Client-side QR generation — no server dependency
+	Backend
+	Flask (Python) 
+	Minimal setup, fast REST API scaffolding, good for academic projects
+	Database
+	SQLite 
+	SQLite requires zero setup; migrate to Postgres if hosted deployment needed
+	Scheduler
+	APScheduler (Flask)
+	Runs auto-release job every 60 seconds in the background
+	Real-time
+	Polling (fallback)
+	Polling is simpler to implement
+	
+
+	
+
+	
+
+	7. Data Model (Simplified)
+
+
+7.1 Slots Table
+Field
+	Type
+	Description
+	slot_id
+	String (PK)
+	Unique identifier e.g. A-01, EV-03
+	category
+	Enum
+	2W / 4W / EV / Disabled
+	status
+	Enum
+	available / occupied / reserved / unavailable
+	rate_per_hour
+	Float
+	Simulated hourly rate in INR
+	
+
+7.2 Bookings Table
+Field
+	Type
+	Description
+	booking_id
+	UUID (PK)
+	Unique booking identifier, encoded in QR code
+	slot_id
+	FK → Slots
+	Which slot is reserved
+	driver_name
+	String
+	Name of the driver
+	vehicle_number
+	String
+	Registration number of vehicle
+	arrival_time
+	DateTime
+	Expected arrival time entered by driver
+	checkin_time
+	DateTime
+	Actual QR scan time at entry
+	checkout_time
+	DateTime
+	Actual QR scan time at exit
+	status
+	Enum
+	confirmed / checked_in / completed / expired / cancelled
+	amount_charged
+	Float
+	Calculated on checkout: duration × rate_per_hour
+	
+
+7.3 Occupancy History Table
+Field
+	Type
+	Description
+	snapshot_time
+	DateTime (PK)
+	Hourly timestamp of snapshot
+	day_of_week
+	Int (0–6)
+	Day identifier for weekly prediction grouping
+	hour
+	Int (0–23)
+	Hour of the snapshot
+	occupancy_pct
+	Float
+	% of total slots occupied at that snapshot
+	8. Key API Endpoints
+
+
+Method
+	Endpoint
+	Description
+	GET
+	/api/slots
+	Returns all slots with current status and category
+	GET
+	/api/slots?type=EV&status=available
+	Filtered slot list by vehicle type and/or status
+	POST
+	/api/bookings
+	Create a new booking; returns booking_id and QR payload
+	DELETE
+	/api/bookings/:id
+	Cancel a booking (within allowed window)
+	POST
+	/api/checkin
+	Validate QR and mark slot as Occupied; log check-in time
+	POST
+	/api/checkout
+	Validate QR, calculate charge, release slot, return receipt
+	GET
+	/api/admin/analytics
+	Returns occupancy rate, revenue, session stats for admin dashboard
+	GET
+	/api/predict/today
+	Returns predicted hourly occupancy % for today based on history
+	PATCH
+	/api/admin/slots/:id
+	Admin: update slot category, status, or rate
+	9. User Flows
+
+
+9.1 Driver — Advance Booking Flow
+6. Driver opens ParkSmart web app and views the live slot map
+7. Filters by vehicle type; identifies an available slot
+8. Clicks slot → opens booking form (name, vehicle no., arrival time)
+9. Submits form → backend creates booking, slot moves to Reserved (Amber)
+10. Driver receives booking confirmation screen with QR code and token (downloadable)
+11. On arrival, driver scans QR at the entry simulation screen
+12. System validates QR → slot moves to Occupied (Red) → entry timestamp logged
+13. On departure, driver scans QR at exit simulation screen
+14. System calculates duration and charge → slot moves to Available (Green) → receipt displayed
+
+
+9.2 Driver — Walk-in Flow
+15. Driver arrives without prior booking
+16. Selects 'Walk-In' on the app → chooses an available slot
+17. Fills quick form (name, vehicle no.) → QR issued immediately
+18. Scans QR at entry → slot becomes Occupied
+19. Exit flow is identical to advance booking
+
+
+9.3 Auto-Release Flow (System)
+20. Background scheduler runs every 60 seconds
+21. Queries all bookings where status = confirmed AND arrival_time + hold_window < now
+22. For each expired booking: status set to expired, slot status set to available
+23. Live slot map reflects green state on next poll/push
+
+
+9.4 Admin — Analytics Flow
+24. Admin logs in via /admin route
+25. Dashboard loads: live occupancy gauge, today's revenue, session count
+26. Admin can toggle to weekly view — bar chart of daily sessions and revenue
+27. Slot utilization heatmap shows which slots are most used
+28. Admin navigates to Slot Management to adjust categories or disable a slot
+29. Session log tab allows search by vehicle number or date range
+10. Non-Functional Requirements
+
+
+Category
+	Requirement
+	Performance
+	Slot map should load/refresh within 2 seconds on localhost; API responses under 500ms
+	Reliability
+	Auto-release scheduler must not miss expired bookings; retry on failure
+	Usability
+	UI must be accessible on desktop browsers (Chrome/Firefox); mobile-responsive is a plus
+	Data Integrity
+	A slot must never show as Available while a valid (non-expired) booking exists for it
+	Security
+	Admin routes must be protected by a simple password/session token; no public access
+	Maintainability
+	Codebase structured in clear layers (routes, services, models); README with setup steps
+
+
+	
+
+11. Development Milestones
+
+
+Phase
+	Milestone
+	Deliverables
+	Duration
+	1
+	Foundation
+	Project setup, DB schema, slot CRUD API, basic slot map UI (static)
+	Week 1–2
+	2
+	Core Features
+	Booking system, auto-release scheduler, QR generation, check-in/out flow
+	Week 3–4
+	3
+	Admin Panel
+	Admin dashboard, slot management, session log, revenue simulation
+	Week 5
+	4
+	Bonus Features
+	Peak hour prediction chart, weekly analytics, digital receipt PDF
+	Week 6
+	5
+	Polish & Demo
+	UI polish, end-to-end testing, demo script, project report finalization
+	Week 7
+	
+
+Intelligent Transport Systems — Student ProjectPage

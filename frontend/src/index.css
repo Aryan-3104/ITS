@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-gray-50;
+}
+
+.slot {
+  @apply transition-all duration-200;
+}
+
+.slot:hover {
+  @apply shadow-lg transform scale-105;
+}
+
+.slot-available {
+  @apply bg-green-500 hover:bg-green-600;
+}
+
+.slot-occupied {
+  @apply bg-red-500 hover:bg-red-600;
+}
+
+.slot-reserved {
+  @apply bg-amber-500 hover:bg-amber-600;
+}
+
+.slot-unavailable {
+  @apply bg-gray-400 hover:bg-gray-500;
+}
+
+.btn-primary {
+  @apply px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition;
+}
+
+.btn-secondary {
+  @apply px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition;
+}
+
+.card {
+  @apply bg-white rounded-lg shadow-md p-6;
+}
