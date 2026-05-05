@@ -47,6 +47,15 @@ def init_db():
             occupancy_pct REAL NOT NULL
         )
     """)
+
+    # Create rate settings table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS rate_settings (
+            vehicle_type TEXT PRIMARY KEY,
+            min_charge REAL NOT NULL,
+            hourly_rate REAL NOT NULL
+        )
+    """)
     
     conn.commit()
     conn.close()

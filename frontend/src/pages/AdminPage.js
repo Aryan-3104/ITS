@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { adminLogin, getAnalytics, getSlots, updateSlot, getSessions, setAdminToken } from '../api/client';
+import { adminLogin, getAnalytics, getSlots, updateSlot, getSessions, setAdminToken, getRates, updateRate } from '../api/client';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
 function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [analytics, setAnalytics] = useState(null);
+  const [rates, setRates] = useState([]);
+  const [rateForm, setRateForm] = useState({});
   const [slots, setSlots] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [selectedTab, setSelectedTab] = useState('dashboard');
@@ -54,9 +56,52 @@ function AdminPage() {
     }
   };
 
+  const fetchRates = async () => {
+    try {
+      const response = await getRates();
+      setRates(response.data);
+
+      const initialForm = {};
+      response.data.forEach((item) => {
+        initialForm[item.vehicle_type] = {
+          min_charge: item.min_charge,
+          hourly_rate: item.hourly_rate,
+        };
+      });
+      setRateForm(initialForm);
+    } catch (err) {
+      setError('Failed to fetch rates');
+    }
+  };
+
+  const handleRateChange = (vehicleType, field, value) => {
+    setRateForm((prev) => ({
+      ...prev,
+      [vehicleType]: {
+        ...prev[vehicleType],
+        [field]: value,
+      },
+    }));
+  };
+
+  const saveRate = async (vehicleType) => {
+    try {
+      const payload = rateForm[vehicleType];
+      await updateRate(vehicleType, {
+        min_charge: Number(payload.min_charge),
+        hourly_rate: Number(payload.hourly_rate),
+      });
+      await fetchRates();
+      setError('');
+    } catch (err) {
+      setError('Failed to update rate');
+    }
+  };
+
   useEffect(() => {
     if (isAuthenticated) {
       fetchAnalytics();
+      fetchRates();
       const interval = setInterval(fetchAnalytics, 30000); // Refresh every 30 seconds
       return () => clearInterval(interval);
     }
@@ -222,6 +267,43 @@ function AdminPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+              <h3 className="text-lg font-bold mb-4">Billing Rules</h3>
+              <p className="text-sm text-gray-600 mb-4">Minimum charge applies to every checkout, and the total is the greater of the minimum charge or hourly charge.</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {['2W', '4W', 'EV'].map((vehicleType) => (
+                  <div key={vehicleType} className="border rounded-lg p-4">
+                    <h4 className="font-semibold mb-3">{vehicleType}</h4>
+                    <label className="block text-sm text-gray-700 mb-1">Minimum Charge (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={rateForm[vehicleType]?.min_charge ?? ''}
+                      onChange={(e) => handleRateChange(vehicleType, 'min_charge', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md mb-3"
+                    />
+                    <label className="block text-sm text-gray-700 mb-1">Hourly Rate (₹/hr)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={rateForm[vehicleType]?.hourly_rate ?? ''}
+                      onChange={(e) => handleRateChange(vehicleType, 'hourly_rate', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md mb-3"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => saveRate(vehicleType)}
+                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-bold"
+                    >
+                      Save {vehicleType}
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

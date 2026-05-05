@@ -9,9 +9,35 @@ from app.models import Booking
 from app.config import BookingStatus, SlotStatus, DEFAULT_HOLD_WINDOW
 from app.services.db_helper import execute_query, execute_update, get_db
 from app.services.slot_service import SlotService
+from app.services.rate_service import RateService, DEFAULT_RATE_SETTINGS
 
 class BookingService:
     """Service for booking operations."""
+
+    @staticmethod
+    def _build_checkout_bill(booking, slot, exit_time=None):
+        """Build a checkout bill without mutating state."""
+        checkin = datetime.fromisoformat(booking.checkin_time)
+        checkout = exit_time or datetime.utcnow()
+        duration_hours = max((checkout - checkin).total_seconds() / 3600, 0)
+        rate_setting = RateService.get_rate_settings(booking.vehicle_type) or DEFAULT_RATE_SETTINGS.get(booking.vehicle_type, {"min_charge": 25.0, "hourly_rate": 20.0})
+        raw_amount = duration_hours * rate_setting["hourly_rate"]
+        amount_charged = round(max(rate_setting["min_charge"], raw_amount), 2)
+
+        return {
+            "booking_id": booking.booking_id,
+            "slot_id": booking.slot_id,
+            "driver_name": booking.driver_name,
+            "vehicle_number": booking.vehicle_number,
+            "vehicle_type": booking.vehicle_type,
+            "arrival_time": booking.arrival_time,
+            "checkin_time": booking.checkin_time,
+            "checkout_time": checkout.isoformat(),
+            "duration_hours": round(duration_hours, 2),
+            "rate_per_hour": rate_setting["hourly_rate"],
+            "min_charge": rate_setting["min_charge"],
+            "amount_charged": amount_charged,
+        }
     
     @staticmethod
     def create_booking(slot_id, driver_name, vehicle_number, vehicle_type, arrival_time):
@@ -138,8 +164,8 @@ class BookingService:
         }
     
     @staticmethod
-    def check_out(booking_id):
-        """Check out a booking and calculate charges."""
+    def preview_checkout(booking_id):
+        """Generate a checkout bill without freeing the slot."""
         booking = BookingService.get_booking(booking_id)
         if not booking:
             raise ValueError(f"Booking {booking_id} not found")
@@ -151,43 +177,52 @@ class BookingService:
         if not slot:
             raise ValueError(f"Slot {booking.slot_id} not found")
         
-        # Calculate duration and charges
-        checkin = datetime.fromisoformat(booking.checkin_time)
-        checkout = datetime.utcnow()
-        duration_hours = (checkout - checkin).total_seconds() / 3600
-        amount_charged = round(duration_hours * slot.rate_per_hour, 2)
-        
-        checkout_iso = checkout.isoformat()
-        
+        return BookingService._build_checkout_bill(booking, slot)
+
+    @staticmethod
+    def complete_checkout(booking_id, checkout_time=None):
+        """Finalize checkout, mark the booking completed, and free the slot."""
+        booking = BookingService.get_booking(booking_id)
+        if not booking:
+            raise ValueError(f"Booking {booking_id} not found")
+
+        if booking.status != BookingStatus.CHECKED_IN:
+            raise ValueError(f"Booking status is {booking.status}, expected checked_in")
+
+        slot = SlotService.get_slot(booking.slot_id)
+        if not slot:
+            raise ValueError(f"Slot {booking.slot_id} not found")
+
+        if checkout_time:
+            exit_time = datetime.fromisoformat(checkout_time)
+        else:
+            exit_time = datetime.utcnow()
+
+        bill = BookingService._build_checkout_bill(booking, slot, exit_time=exit_time)
+
         with get_db() as conn:
             cursor = conn.cursor()
-            
-            # Update booking
+
             cursor.execute(
-                """UPDATE bookings 
-                   SET status = ?, checkout_time = ?, amount_charged = ? 
+                """UPDATE bookings
+                   SET status = ?, checkout_time = ?, amount_charged = ?
                    WHERE booking_id = ?""",
-                (BookingStatus.COMPLETED, checkout_iso, amount_charged, booking_id)
+                (BookingStatus.COMPLETED, bill["checkout_time"], bill["amount_charged"], booking_id)
             )
-            
-            # Release slot
+
             cursor.execute(
                 "UPDATE slots SET status = ? WHERE slot_id = ?",
                 (SlotStatus.AVAILABLE, booking.slot_id)
             )
-            
+
             conn.commit()
-        
-        return {
-            "booking_id": booking_id,
-            "slot_id": booking.slot_id,
-            "checkin_time": booking.checkin_time,
-            "checkout_time": checkout_iso,
-            "duration_hours": round(duration_hours, 2),
-            "rate_per_hour": slot.rate_per_hour,
-            "amount_charged": amount_charged,
-            "vehicle_number": booking.vehicle_number,
-        }
+
+        return bill
+
+    @staticmethod
+    def check_out(booking_id):
+        """Backward-compatible checkout that finalizes payment immediately."""
+        return BookingService.complete_checkout(booking_id)
     
     @staticmethod
     def create_walkin_booking(slot_id, driver_name, vehicle_number, vehicle_type):

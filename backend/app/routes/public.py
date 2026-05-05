@@ -82,7 +82,7 @@ def check_in():
 
 @public_bp.route("/checkout", methods=["POST"])
 def check_out():
-    """Check out a booking via QR scan."""
+    """Preview the checkout bill via QR scan without freeing the slot."""
     try:
         data = request.json
         qr_payload = data.get("qr_payload")
@@ -93,8 +93,29 @@ def check_out():
         decoded = decode_qr_payload(qr_payload)
         booking_id = decoded.get("booking_id")
         
-        result = BookingService.check_out(booking_id)
-        return jsonify(result), 200
+        bill = BookingService.preview_checkout(booking_id)
+        return jsonify({"bill": bill, "payment_required": True}), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@public_bp.route("/checkout/complete", methods=["POST"])
+def complete_checkout():
+    """Finalize checkout after simulated payment and free the slot."""
+    try:
+        data = request.json
+        qr_payload = data.get("qr_payload")
+        checkout_time = data.get("checkout_time")
+
+        if not qr_payload:
+            return jsonify({"error": "Missing qr_payload"}), 400
+
+        decoded = decode_qr_payload(qr_payload)
+        booking_id = decoded.get("booking_id")
+
+        bill = BookingService.complete_checkout(booking_id, checkout_time=checkout_time)
+        return jsonify({"bill": bill, "payment_status": "paid", "slot_freed": True}), 200
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:

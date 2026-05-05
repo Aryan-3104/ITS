@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getSlots, createBooking, getPrediction } from '../api/client';
+import { getSlots, createBooking, checkIn, checkOut, completeCheckout, getPrediction } from '../api/client';
 
 function DriverPage() {
   const [slots, setSlots] = useState([]);
@@ -14,6 +14,9 @@ function DriverPage() {
     arrival_time: '',
   });
   const [bookingResult, setBookingResult] = useState(null);
+  const [gateQrPayload, setGateQrPayload] = useState('');
+  const [gateMessage, setGateMessage] = useState(null);
+  const [checkoutBill, setCheckoutBill] = useState(null);
   const [prediction, setPrediction] = useState(null);
   const [error, setError] = useState('');
 
@@ -89,9 +92,79 @@ function DriverPage() {
       setBookingResult(response.data);
       setSelectedSlot(null);
       setBookingForm({ driver_name: '', vehicle_number: '', vehicle_type: '4W', arrival_time: '' });
+      setGateQrPayload(response.data.qr_payload || '');
+      setGateMessage({
+        type: 'info',
+        title: 'Reservation created',
+        message: 'Your slot is reserved. Billing will be shown only at checkout.',
+      });
       setError('');
     } catch (err) {
       setError(err.response?.data?.error || 'Booking failed');
+    }
+  };
+
+  const handleCheckIn = async (e) => {
+    e.preventDefault();
+
+    if (!gateQrPayload.trim()) {
+      setError('Enter the QR payload from your reservation to check in.');
+      return;
+    }
+
+    try {
+      const response = await checkIn(gateQrPayload.trim());
+      setGateMessage({
+        type: 'success',
+        title: 'Check-in completed',
+        message: `Slot ${response.data.slot_id} is now occupied.`,
+      });
+      setError('');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Check-in failed');
+    }
+  };
+
+  const handlePreviewBill = async (e) => {
+    e.preventDefault();
+
+    if (!gateQrPayload.trim()) {
+      setError('Enter the QR payload from your reservation to generate the bill.');
+      return;
+    }
+
+    try {
+      const response = await checkOut(gateQrPayload.trim());
+      setCheckoutBill(response.data.bill);
+      setGateMessage({
+        type: 'info',
+        title: 'Bill generated',
+        message: 'Review the bill below and simulate payment when ready.',
+      });
+      setError('');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to generate bill');
+    }
+  };
+
+  const handleCompletePayment = async () => {
+    if (!gateQrPayload.trim() || !checkoutBill) {
+      setError('Generate the bill first before completing payment.');
+      return;
+    }
+
+    try {
+      const response = await completeCheckout(gateQrPayload.trim(), checkoutBill.checkout_time);
+      setGateMessage({
+        type: 'success',
+        title: 'Payment completed',
+        message: `Slot ${response.data.bill.slot_id} is now free.`,
+      });
+      setBookingResult(null);
+      setCheckoutBill(response.data.bill);
+      setError('');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Payment simulation failed');
     }
   };
 
@@ -332,13 +405,136 @@ function DriverPage() {
                 <h3 className="text-xl font-bold mb-2">Booking Confirmed!</h3>
                 <p>Booking ID: <strong>{bookingResult.booking_id}</strong></p>
                 <p>Slot: <strong>{bookingResult.slot_id}</strong></p>
-                <p>Amount: <strong>₹{bookingResult.amount_charged}</strong></p>
+                <p className="mt-2 text-sm text-green-800">No payment is taken now. Billing will appear after checkout.</p>
                 <button
                   onClick={() => setBookingResult(null)}
                   className="mt-4 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
                 >
                   Book Another Slot
                 </button>
+              </div>
+            )}
+
+            {/* Gate Actions */}
+            <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+              <h2 className="text-xl font-bold mb-4">Gate Actions</h2>
+              <p className="text-sm text-gray-600 mb-4">
+                Use the reservation QR payload to check in when you arrive, then check out and pay when you leave.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <form onSubmit={handleCheckIn} className="border rounded-lg p-4">
+                  <h3 className="font-semibold text-gray-800 mb-3">Check In</h3>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    QR Payload
+                  </label>
+                  <textarea
+                    value={gateQrPayload}
+                    onChange={(e) => setGateQrPayload(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md mb-3"
+                    rows="4"
+                    placeholder="Paste booking QR payload here"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                  >
+                    Check In
+                  </button>
+                </form>
+
+                <form onSubmit={handlePreviewBill} className="border rounded-lg p-4">
+                  <h3 className="font-semibold text-gray-800 mb-3">Checkout Bill</h3>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    QR Payload
+                  </label>
+                  <textarea
+                    value={gateQrPayload}
+                    onChange={(e) => setGateQrPayload(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md mb-3"
+                    rows="4"
+                    placeholder="Paste the same booking QR payload here"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition"
+                  >
+                    Generate Bill
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            {checkoutBill && (
+              <div className="bg-white rounded-lg shadow-md p-6 mb-8 border border-gray-200">
+                <h2 className="text-xl font-bold mb-4">Checkout Bill</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-gray-500">Booking ID</p>
+                    <p className="font-semibold">{checkoutBill.booking_id}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Slot</p>
+                    <p className="font-semibold">{checkoutBill.slot_id}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Vehicle Number</p>
+                    <p className="font-semibold">{checkoutBill.vehicle_number}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Vehicle Type</p>
+                    <p className="font-semibold">{getCategoryLabel(checkoutBill.vehicle_type)}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Arrival Time</p>
+                    <p className="font-semibold">{new Date(checkoutBill.arrival_time).toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Exit Time</p>
+                    <p className="font-semibold">{new Date(checkoutBill.checkout_time).toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Duration</p>
+                    <p className="font-semibold">{checkoutBill.duration_hours} hours</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Rate</p>
+                    <p className="font-semibold">₹{checkoutBill.rate_per_hour}/hour</p>
+                  </div>
+                </div>
+
+                <div className="mt-6 p-4 bg-blue-50 rounded-lg flex items-center justify-between flex-wrap gap-3">
+                  <div>
+                    <p className="text-sm text-blue-700">Total Amount</p>
+                    <p className="text-2xl font-bold text-blue-900">₹{checkoutBill.amount_charged}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCompletePayment}
+                    className="px-5 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                  >
+                    Simulate Payment & Free Slot
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {gateMessage && (
+              <div className={`border rounded-lg px-6 py-4 mb-8 ${gateMessage.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-blue-50 border-blue-200 text-blue-800'}`}>
+                <h3 className="text-lg font-bold mb-1">{gateMessage.title}</h3>
+                <p>{gateMessage.message}</p>
+              </div>
+            )}
+
+            {bookingResult && bookingResult.qr_payload && (
+              <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+                <h2 className="text-xl font-bold mb-3">Reservation QR Payload</h2>
+                <p className="text-sm text-gray-600 mb-3">Save this payload for gate entry and exit.</p>
+                <textarea
+                  readOnly
+                  value={bookingResult.qr_payload}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 font-mono text-sm"
+                  rows="3"
+                />
               </div>
             )}
           </>

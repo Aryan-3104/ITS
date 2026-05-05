@@ -10,6 +10,29 @@ from app.config import (
 
 DB_PATH = os.getenv("DATABASE_URL", "sqlite:///./parksmart.db").replace("sqlite:///", "")
 
+DEFAULT_BILLING_RULES = {
+    SlotCategory.TWO_WHEELER: {"min_charge": 25.0, "hourly_rate": 20.0},
+    SlotCategory.FOUR_WHEELER: {"min_charge": 25.0, "hourly_rate": 20.0},
+    SlotCategory.EV: {"min_charge": 25.0, "hourly_rate": 20.0},
+}
+
+def seed_rate_settings():
+    """Populate default billing rules for supported vehicle types."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute("DELETE FROM rate_settings")
+
+    for vehicle_type, rule in DEFAULT_BILLING_RULES.items():
+        cursor.execute("""
+            INSERT INTO rate_settings (vehicle_type, min_charge, hourly_rate)
+            VALUES (?, ?, ?)
+        """, (vehicle_type, rule["min_charge"], rule["hourly_rate"]))
+
+    conn.commit()
+    conn.close()
+    print("Seeded default billing rules")
+
 def seed_slots():
     """Populate parking slots."""
     conn = sqlite3.connect(DB_PATH)
@@ -94,6 +117,7 @@ def seed_occupancy_history():
 
 def seed_db():
     """Run all seeding routines."""
+    seed_rate_settings()
     seed_slots()
     seed_occupancy_history()
 

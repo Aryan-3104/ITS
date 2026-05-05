@@ -6,6 +6,7 @@ from flask import Blueprint, request, jsonify
 from app.services.slot_service import SlotService
 from app.services.booking_service import BookingService
 from app.services.analytics_service import AnalyticsService
+from app.services.rate_service import RateService
 from app.config import SlotStatus
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
@@ -96,6 +97,29 @@ def get_utilization_heatmap():
     days = request.args.get("days", 7, type=int)
     heatmap = AnalyticsService.get_slot_utilization_heatmap(days=days)
     return jsonify(heatmap)
+
+@admin_bp.route("/rates", methods=["GET"])
+@check_admin_auth
+def get_rates():
+    """Get billing rules for supported vehicle types."""
+    return jsonify(RateService.get_rate_settings())
+
+@admin_bp.route("/rates/<vehicle_type>", methods=["PATCH"])
+@check_admin_auth
+def update_rate(vehicle_type):
+    """Update billing rules for a vehicle type."""
+    try:
+        data = request.json or {}
+        min_charge = data.get("min_charge")
+        hourly_rate = data.get("hourly_rate")
+
+        if min_charge is None or hourly_rate is None:
+            return jsonify({"error": "Missing min_charge or hourly_rate"}), 400
+
+        updated = RateService.upsert_rate_setting(vehicle_type, float(min_charge), float(hourly_rate))
+        return jsonify(updated), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @admin_bp.route("/login", methods=["POST"])
 def admin_login():

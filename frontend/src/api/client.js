@@ -39,6 +39,13 @@ export const checkOut = (qrPayload) => {
   return api.post('/checkout', { qr_payload: qrPayload });
 };
 
+export const completeCheckout = (qrPayload, checkoutTime) => {
+  return api.post('/checkout/complete', {
+    qr_payload: qrPayload,
+    checkout_time: checkoutTime,
+  });
+};
+
 export const createWalkinBooking = (data) => {
   return api.post('/bookings/walkin', data);
 };
@@ -70,6 +77,14 @@ export const getSessions = (params) => {
 
 export const getUtilizationHeatmap = (days = 7) => {
   return api.get('/admin/utilization-heatmap', { params: { days } });
+};
+
+export const getRates = () => {
+  return api.get('/admin/rates');
+};
+
+export const updateRate = (vehicleType, data) => {
+  return api.patch(`/admin/rates/${vehicleType}`, data);
 };
 
 export default api;

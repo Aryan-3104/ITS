@@ -6,7 +6,7 @@ from flask import Flask
 from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.db.init import init_db
-from app.db.seed import seed_db
+from app.db.seed import seed_db, seed_rate_settings
 from app.routes.public import public_bp
 from app.routes.admin import admin_bp
 from app.jobs.auto_release import auto_release_job
@@ -20,6 +20,7 @@ def create_app():
     
     # Initialize database
     init_db()
+    seed_rate_settings()
     
     # Check if slots need seeding
     from app.services.slot_service import SlotService
