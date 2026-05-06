@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { adminLogin, getAnalytics, getSlots, updateSlot, getSessions, setAdminToken, getRates, updateRate } from '../api/client';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { adminLogin, getAnalytics, getSlots, getSessions, setAdminToken, getRates, updateRate } from '../api/client';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import ChartSection from '../components/ChartSection';
+import { LogOut, X } from 'lucide-react';
 
 function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [analytics, setAnalytics] = useState(null);
-  const [rates, setRates] = useState([]);
   const [rateForm, setRateForm] = useState({});
   const [slots, setSlots] = useState([]);
   const [sessions, setSessions] = useState([]);
@@ -16,6 +17,7 @@ function AdminPage() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setLoading(true);
     try {
       const response = await adminLogin(password);
       setAdminToken(response.data.token);
@@ -25,6 +27,8 @@ function AdminPage() {
       await fetchAnalytics();
     } catch (err) {
       setError('Invalid password');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -59,7 +63,6 @@ function AdminPage() {
   const fetchRates = async () => {
     try {
       const response = await getRates();
-      setRates(response.data);
 
       const initialForm = {};
       response.data.forEach((item) => {
@@ -102,7 +105,7 @@ function AdminPage() {
     if (isAuthenticated) {
       fetchAnalytics();
       fetchRates();
-      const interval = setInterval(fetchAnalytics, 30000); // Refresh every 30 seconds
+      const interval = setInterval(fetchAnalytics, 30000);
       return () => clearInterval(interval);
     }
   }, [isAuthenticated]);
@@ -121,251 +124,281 @@ function AdminPage() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-blue-600 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full">
-          <h1 className="text-3xl font-bold text-blue-600 mb-6 text-center">ParkSmart Admin</h1>
+      <div className="min-h-screen bg-[--bg-base] flex items-center justify-center p-4">
+        <div className="bg-[--bg-surface] border border-[--border] rounded-2xl p-8 max-w-md w-full shadow-2xl">
+          <h1 className="text-4xl font-display font-bold text-[--text-primary] mb-2 text-center">ParkSmart</h1>
+          <p className="text-[--text-muted] text-center mb-8 text-sm">Admin Dashboard</p>
+          
           <form onSubmit={handleLogin}>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="mb-6">
+              <label className="block text-xs uppercase tracking-widest text-[--text-muted] mb-2">
                 Admin Password
               </label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="w-full bg-[--bg-elevated] border border-[--border] rounded-lg px-4 py-3 text-[--text-primary] focus:ring-2 focus:ring-[--accent-blue] outline-none transition"
                 placeholder="Enter admin password"
                 autoComplete="off"
               />
             </div>
-            {error && <div className="text-red-600 text-sm mb-4">{error}</div>}
-            <button
-              type="submit"
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-bold"
-            >
-              Login
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-2 rounded-lg mb-4 text-sm flex justify-between items-center">
+                <span>{error}</span>
+                <button type="button" onClick={() => setError('')}><X size={16} /></button>
+              </div>
+            )}
+            <button type="submit" disabled={loading} className="w-full btn-primary font-semibold py-3 disabled:opacity-50 flex items-center justify-center">
+              {loading ? 'Authenticating...' : 'Login'}
             </button>
           </form>
-          <p className="text-center text-gray-600 text-sm mt-6">
-            Default password: <code className="bg-gray-100 px-2 py-1 rounded">admin123</code>
+          <p className="text-center text-[--text-muted] text-xs mt-6">
+            Demo password: <code className="bg-[--bg-elevated] px-2 py-1 rounded">admin123</code>
           </p>
         </div>
       </div>
     );
   }
 
+  const TabButton = ({ id, label }) => (
+    <button
+      onClick={() => setSelectedTab(id)}
+      className={`px-6 py-3 font-medium text-sm uppercase tracking-wider transition-all duration-200 border-b-2 flex items-center justify-center whitespace-nowrap ${
+        selectedTab === id
+          ? 'border-[--accent-blue] text-[--accent-blue]'
+          : 'border-transparent text-[--text-muted] hover:text-[--text-primary]'
+      }`}
+    >
+      {label}
+    </button>
+  );
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* Header */}
-      <div className="bg-blue-600 text-white p-6 shadow-md">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <h1 className="text-3xl font-bold">ParkSmart Admin</h1>
+      <div className="bg-[--bg-surface] border-b border-[--border] sticky top-16 z-20">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+          <h1 className="text-2xl font-display font-bold text-[--text-primary]">Command Center</h1>
           <button
             onClick={() => {
               setIsAuthenticated(false);
               setAdminToken(null);
             }}
-            className="px-4 py-2 bg-blue-700 hover:bg-blue-800 rounded transition"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[--bg-elevated] hover:bg-red-500/10 text-[--text-muted] hover:text-red-400 rounded-lg transition"
           >
-            Logout
+            <LogOut size={18} />
+            <span className="text-sm font-medium">Logout</span>
           </button>
         </div>
-      </div>
 
-      {/* Tabs */}
-      <div className="border-b border-gray-300 bg-white">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex gap-8">
-            <button
-              onClick={() => setSelectedTab('dashboard')}
-              className={`py-4 px-2 font-medium transition ${
-                selectedTab === 'dashboard'
-                  ? 'border-b-2 border-blue-600 text-blue-600'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Dashboard
-            </button>
-            <button
-              onClick={() => setSelectedTab('slots')}
-              className={`py-4 px-2 font-medium transition ${
-                selectedTab === 'slots'
-                  ? 'border-b-2 border-blue-600 text-blue-600'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Slot Management
-            </button>
-            <button
-              onClick={() => setSelectedTab('sessions')}
-              className={`py-4 px-2 font-medium transition ${
-                selectedTab === 'sessions'
-                  ? 'border-b-2 border-blue-600 text-blue-600'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Session Log
-            </button>
-          </div>
+        {/* Tabs */}
+        <div className="border-t border-[--border] flex gap-8 px-6">
+          <TabButton id="dashboard" label="Dashboard" />
+          <TabButton id="slots" label="Slot Management" />
+          <TabButton id="sessions" label="Session Log" />
+          <TabButton id="rates" label="Billing" />
         </div>
       </div>
 
       {/* Content */}
       <div className="max-w-7xl mx-auto p-6">
         {error && (
-          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6">
-            {error}
+          <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-6 py-4 rounded-lg mb-6 flex justify-between items-center">
+            <span className="font-medium">{error}</span>
+            <button onClick={() => setError('')}><X size={20} /></button>
           </div>
         )}
 
         {/* Dashboard Tab */}
         {selectedTab === 'dashboard' && analytics && (
-          <div>
-            <h2 className="text-2xl font-bold mb-6">Dashboard</h2>
+          <div className="space-y-8">
+            <h2 className="text-3xl font-display font-bold text-[--text-primary]">Live Metrics</h2>
 
             {/* KPI Cards */}
-            <div className="grid grid-cols-3 gap-6 mb-8">
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <p className="text-gray-600 text-sm font-medium mb-2">Occupancy Rate</p>
-                <p className="text-4xl font-bold text-blue-600">{analytics.occupancy_rate}%</p>
-              </div>
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <p className="text-gray-600 text-sm font-medium mb-2">Today's Revenue</p>
-                <p className="text-4xl font-bold text-green-600">₹{analytics.today_revenue}</p>
-              </div>
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <p className="text-gray-600 text-sm font-medium mb-2">Sessions Today</p>
-                <p className="text-4xl font-bold text-orange-600">{analytics.today_sessions}</p>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <StatCard 
+                title="Occupancy Rate" 
+                value={`${analytics.occupancy_rate}%`} 
+                trend="+2.5% today"
+              />
+              <StatCard 
+                title="Today's Revenue" 
+                value={`₹${analytics.today_revenue}`} 
+                trend="↑ Active"
+              />
+              <StatCard 
+                title="Sessions Today" 
+                value={analytics.today_sessions} 
+                trend="ongoing"
+              />
             </div>
 
             {/* Charts */}
-            <div className="grid grid-cols-2 gap-6">
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="text-lg font-bold mb-4">Hourly Revenue</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <ChartSection title="Hourly Revenue Trend">
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={analytics.hourly_revenue}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="hour" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="revenue" fill="#3b82f6" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="hour" stroke="var(--text-muted)" />
+                    <YAxis stroke="var(--text-muted)" />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+                      labelStyle={{ color: 'var(--text-primary)' }}
+                    />
+                    <Bar dataKey="revenue" fill="var(--accent-blue)" />
                   </BarChart>
                 </ResponsiveContainer>
-              </div>
+              </ChartSection>
 
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="text-lg font-bold mb-4">Vehicle Type Breakdown</h3>
-                <div className="space-y-2">
-                  {analytics.vehicle_type_breakdown.map((item) => (
-                    <div key={item.vehicle_type} className="flex justify-between items-center">
-                      <span className="text-gray-700">{item.vehicle_type}</span>
-                      <div className="flex items-center gap-2">
-                        <div className="bg-blue-600 rounded h-6" style={{ width: `${(item.count / (analytics.today_sessions || 1)) * 200}px` }}></div>
-                        <span className="font-bold">{item.count}</span>
+              <ChartSection title="Vehicle Type Distribution">
+                <div className="space-y-4">
+                  {analytics.vehicle_type_breakdown.map((item) => {
+                    const percentage = Math.round((item.count / (analytics.today_sessions || 1)) * 100);
+                    return (
+                      <div key={item.vehicle_type}>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-sm font-medium">{item.vehicle_type}</span>
+                          <span className="text-sm text-[--text-muted]">{item.count} sessions</span>
+                        </div>
+                        <div className="w-full h-2 bg-[--bg-elevated] rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-gradient-to-r from-[--accent-blue] to-[--accent-green]"
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-md p-6 mt-6">
-              <h3 className="text-lg font-bold mb-4">Billing Rules</h3>
-              <p className="text-sm text-gray-600 mb-4">Minimum charge applies to every checkout, and the total is the greater of the minimum charge or hourly charge.</p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {['2W', '4W', 'EV'].map((vehicleType) => (
-                  <div key={vehicleType} className="border rounded-lg p-4">
-                    <h4 className="font-semibold mb-3">{vehicleType}</h4>
-                    <label className="block text-sm text-gray-700 mb-1">Minimum Charge (₹)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.5"
-                      value={rateForm[vehicleType]?.min_charge ?? ''}
-                      onChange={(e) => handleRateChange(vehicleType, 'min_charge', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md mb-3"
-                    />
-                    <label className="block text-sm text-gray-700 mb-1">Hourly Rate (₹/hr)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.5"
-                      value={rateForm[vehicleType]?.hourly_rate ?? ''}
-                      onChange={(e) => handleRateChange(vehicleType, 'hourly_rate', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md mb-3"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => saveRate(vehicleType)}
-                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-bold"
-                    >
-                      Save {vehicleType}
-                    </button>
-                  </div>
-                ))}
-              </div>
+              </ChartSection>
             </div>
           </div>
         )}
 
         {/* Slot Management Tab */}
         {selectedTab === 'slots' && (
-          <div>
-            <h2 className="text-2xl font-bold mb-6">Slot Management</h2>
-            <div className="grid grid-cols-10 gap-2">
-              {slots.map((slot) => (
-                <div
-                  key={slot.slot_id}
-                  className={`p-3 rounded text-white text-center cursor-pointer font-bold transition hover:shadow-lg ${
-                    slot.status === 'available'
-                      ? 'bg-green-500'
-                      : slot.status === 'occupied'
-                      ? 'bg-red-500'
-                      : slot.status === 'reserved'
-                      ? 'bg-amber-500'
-                      : 'bg-gray-400'
-                  }`}
-                  title={`${slot.slot_id} - ${slot.category} - ₹${slot.rate_per_hour}/hr`}
-                >
-                  {slot.slot_id.split('-')[1]}
-                </div>
-              ))}
+          <div className="space-y-6">
+            <h2 className="text-3xl font-display font-bold text-[--text-primary]">Slot Management</h2>
+            <div className="bg-[--bg-surface] border border-[--border] rounded-xl p-6">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-10 xl:grid-cols-12 gap-3">
+                {slots.map((slot) => {
+                  const statusColors = {
+                    available: 'bg-[--accent-green]/10 border-[--accent-green]/50 text-[--accent-green]',
+                    occupied: 'bg-[--accent-red]/10 border-[--accent-red]/50 text-[--accent-red]',
+                    reserved: 'bg-[--accent-amber]/10 border-[--accent-amber]/50 text-[--accent-amber]',
+                    unavailable: 'bg-[--accent-grey]/10 border-[--accent-grey]/50 text-[--accent-grey]',
+                  };
+                  return (
+                    <div
+                      key={slot.slot_id}
+                      className={`p-3 rounded-lg text-center font-semibold text-sm transition border
+                        ${statusColors[slot.status] || statusColors.unavailable}
+                      `}
+                      title={`${slot.slot_id} - ${slot.category} - ₹${slot.rate_per_hour}/hr`}
+                    >
+                      <div className="font-display font-bold">{slot.slot_id.split('-')[1]}</div>
+                      <div className="text-xs uppercase tracking-widest mt-1">{slot.status}</div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
 
         {/* Session Log Tab */}
         {selectedTab === 'sessions' && (
-          <div>
-            <h2 className="text-2xl font-bold mb-6">Session Log</h2>
-            <div className="bg-white rounded-lg shadow-md overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-gray-200">
-                  <tr>
-                    <th className="px-4 py-2 text-left">Booking ID</th>
-                    <th className="px-4 py-2 text-left">Slot</th>
-                    <th className="px-4 py-2 text-left">Driver</th>
-                    <th className="px-4 py-2 text-left">Vehicle</th>
-                    <th className="px-4 py-2 text-left">Check-in</th>
-                    <th className="px-4 py-2 text-left">Check-out</th>
-                    <th className="px-4 py-2 text-right">Charge</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sessions.map((session) => (
-                    <tr key={session.booking_id} className="border-b border-gray-200 hover:bg-gray-50">
-                      <td className="px-4 py-2 font-mono text-sm">{session.booking_id.slice(0, 8)}</td>
-                      <td className="px-4 py-2">{session.slot_id}</td>
-                      <td className="px-4 py-2">{session.driver_name}</td>
-                      <td className="px-4 py-2">{session.vehicle_number}</td>
-                      <td className="px-4 py-2 text-sm text-gray-600">{new Date(session.checkin_time).toLocaleString()}</td>
-                      <td className="px-4 py-2 text-sm text-gray-600">{new Date(session.checkout_time).toLocaleString()}</td>
-                      <td className="px-4 py-2 text-right font-bold">₹{session.amount_charged}</td>
+          <div className="space-y-6">
+            <h2 className="text-3xl font-display font-bold text-[--text-primary]">Session Log</h2>
+            <div className="bg-[--bg-surface] border border-[--border] rounded-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-[--bg-elevated] border-b border-[--border]">
+                      <th className="px-4 py-3 text-left text-[--text-muted] uppercase tracking-widest font-semibold">Booking ID</th>
+                      <th className="px-4 py-3 text-left text-[--text-muted] uppercase tracking-widest font-semibold">Slot</th>
+                      <th className="px-4 py-3 text-left text-[--text-muted] uppercase tracking-widest font-semibold">Driver</th>
+                      <th className="px-4 py-3 text-left text-[--text-muted] uppercase tracking-widest font-semibold">Vehicle</th>
+                      <th className="px-4 py-3 text-left text-[--text-muted] uppercase tracking-widest font-semibold">Check-in</th>
+                      <th className="px-4 py-3 text-left text-[--text-muted] uppercase tracking-widest font-semibold">Check-out</th>
+                      <th className="px-4 py-3 text-right text-[--text-muted] uppercase tracking-widest font-semibold">Amount</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {sessions.map((session, idx) => (
+                      <tr 
+                        key={session.booking_id} 
+                        className={`border-b border-[--border] transition hover:bg-[--bg-elevated]
+                          ${idx % 2 === 0 ? 'bg-[--bg-base]' : 'bg-[--bg-surface]'}
+                        `}
+                      >
+                        <td className="px-4 py-3 font-mono text-xs text-[--accent-blue]">{session.booking_id.slice(0, 8)}</td>
+                        <td className="px-4 py-3 font-semibold">{session.slot_id}</td>
+                        <td className="px-4 py-3">{session.driver_name}</td>
+                        <td className="px-4 py-3 font-mono text-xs">{session.vehicle_number}</td>
+                        <td className="px-4 py-3 text-[--text-muted] text-xs">{new Date(session.checkin_time).toLocaleString()}</td>
+                        <td className="px-4 py-3 text-[--text-muted] text-xs">{new Date(session.checkout_time).toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right font-bold text-[--accent-green]">₹{session.amount_charged}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Billing Rules Tab */}
+        {selectedTab === 'rates' && (
+          <div className="space-y-6">
+            <h2 className="text-3xl font-display font-bold text-[--text-primary]">Billing Configuration</h2>
+            <div className="bg-[--bg-surface] border border-[--border] rounded-xl p-6">
+              <p className="text-[--text-muted] text-sm mb-8">
+                Set minimum charges and hourly rates. The final bill is the greater of min charge or (rate × duration).
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {['2W', '4W', 'EV'].map((vehicleType) => (
+                  <div key={vehicleType} className="bg-[--bg-elevated] border border-[--border] rounded-lg p-6">
+                    <h4 className="text-lg font-semibold text-[--text-primary] mb-4 font-display">{vehicleType}</h4>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs uppercase tracking-widest text-[--text-muted] mb-2">
+                          Minimum Charge (₹)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={rateForm[vehicleType]?.min_charge ?? ''}
+                          onChange={(e) => handleRateChange(vehicleType, 'min_charge', e.target.value)}
+                          className="w-full bg-[--bg-surface] border border-[--border] rounded-lg px-3 py-2 text-[--text-primary] focus:ring-2 focus:ring-[--accent-blue] outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs uppercase tracking-widest text-[--text-muted] mb-2">
+                          Hourly Rate (₹/hr)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={rateForm[vehicleType]?.hourly_rate ?? ''}
+                          onChange={(e) => handleRateChange(vehicleType, 'hourly_rate', e.target.value)}
+                          className="w-full bg-[--bg-surface] border border-[--border] rounded-lg px-3 py-2 text-[--text-primary] focus:ring-2 focus:ring-[--accent-blue] outline-none"
+                        />
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={() => saveRate(vehicleType)} 
+                        className="w-full btn-primary font-semibold py-3 text-sm flex items-center justify-center"
+                      >
+                        Save {vehicleType}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -373,5 +406,15 @@ function AdminPage() {
     </div>
   );
 }
+
+const StatCard = ({ title, value, trend }) => (
+  <div className="bg-[--bg-surface] border border-[--border] rounded-xl p-6 border-l-4 border-l-[--accent-blue]">
+    <h3 className="text-sm uppercase tracking-widest text-[--text-muted] mb-2">{title}</h3>
+    <div className="flex items-baseline justify-between">
+      <div className="text-4xl font-display font-bold text-[--text-primary]">{value}</div>
+      <div className="text-xs font-medium text-[--accent-green]">{trend}</div>
+    </div>
+  </div>
+);
 
 export default AdminPage;

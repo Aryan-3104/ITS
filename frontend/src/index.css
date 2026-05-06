@@ -1,43 +1,79 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=Syne:wght@700;800&display=swap');
+@import './styles/animations.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-gray-50;
+:root {
+  --bg-base: #0d0f14;
+  --bg-surface: #151820;
+  --bg-elevated: #1e2130;
+  --accent-green: #00e676;
+  --accent-amber: #ffb300;
+  --accent-red: #ff1744;
+  --accent-grey: #546e7a;
+  --accent-blue: #2979ff;
+  --text-primary: #e8eaf0;
+  --text-muted: #8892a4;
+  --border: rgba(255, 255, 255, 0.07);
+  --ps-radius: 12px;
 }
 
-.slot {
-  @apply transition-all duration-200;
+@layer base {
+  body {
+    background-color: var(--bg-base);
+    font-family: 'DM Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Syne', sans-serif;
+  }
+
+  a {
+    color: var(--accent-blue);
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bg-surface);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2a2f42;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3a3f52;
+  }
 }
 
-.slot:hover {
-  @apply shadow-lg transform scale-105;
+/* General card */
+.card {
+  @apply bg-[--bg-surface] rounded-lg p-6;
+  border-radius: var(--ps-radius);
+  border: 1px solid var(--border);
 }
 
-.slot-available {
-  @apply bg-green-500 hover:bg-green-600;
-}
-
-.slot-occupied {
-  @apply bg-red-500 hover:bg-red-600;
-}
-
-.slot-reserved {
-  @apply bg-amber-500 hover:bg-amber-600;
-}
-
-.slot-unavailable {
-  @apply bg-gray-400 hover:bg-gray-500;
-}
-
+/* Buttons */
 .btn-primary {
-  @apply px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition;
+  @apply px-4 py-2 text-white rounded-lg shadow-sm font-semibold bg-[--accent-blue] hover:brightness-110 transition-all;
+}
+.btn-primary:hover {
+  transform: translateY(-1px);
 }
 
 .btn-secondary {
-  @apply px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition;
+  @apply px-4 py-2 bg-gray-700 text-white rounded;
 }
 
-.card {
-  @apply bg-white rounded-lg shadow-md p-6;
+.muted {
+  color: var(--text-muted);
 }
+
