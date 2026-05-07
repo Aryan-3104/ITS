@@ -1,6 +1,6 @@
 import React from 'react';
 
-const SlotCard = ({ slot, onClick, isNearest }) => {
+const SlotCard = ({ slot, onClick, isNearest, adminMode = false }) => {
   const { slot_id, status } = slot;
 
   const statusStyles = {
@@ -41,7 +41,7 @@ const SlotCard = ({ slot, onClick, isNearest }) => {
   return (
     <button
       onClick={() => {
-        if (status === 'available' && onClick) onClick(slot);
+        if ((adminMode || status === 'available') && onClick) onClick(slot);
       }}
       className={`relative w-full h-[96px] flex flex-col items-center justify-between rounded-lg border transition-all duration-300 overflow-hidden min-w-0 p-3
         ${styles.bg} ${styles.text} ${styles.border} ${styles.hover}
@@ -49,7 +49,7 @@ const SlotCard = ({ slot, onClick, isNearest }) => {
         focus:outline-none focus:ring-2 focus:ring-[--accent-blue]
       `}
       aria-label={`Slot ${slot_id}, ${status}, ${slot.category}`}
-      disabled={status !== 'available'}
+      disabled={!adminMode && status !== 'available'}
     >
       {isNearest && status === 'available' && (
         <span className="absolute -top-1 -right-1 flex h-3 w-3">

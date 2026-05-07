@@ -59,8 +59,20 @@ export const adminLogin = (password) => {
   return api.post('/admin/login', { password });
 };
 
-export const getAnalytics = () => {
-  return api.get('/admin/analytics');
+export const getAnalytics = (period = 'weekly') => {
+  return api.get('/admin/analytics', { params: { period } });
+};
+
+export const getBookings = (params) => {
+  return api.get('/admin/bookings', { params });
+};
+
+export const forceAssignBooking = (data) => {
+  return api.post('/admin/bookings/force-assign', data);
+};
+
+export const deleteBooking = (bookingId) => {
+  return api.delete(`/admin/bookings/${bookingId}`);
 };
 
 export const updateSlot = (slotId, data) => {

@@ -51,9 +51,11 @@ function DriverPage() {
   };
 
   const handleBookingSuccess = (data) => {
-    setBookingResult(data);
+    // data may contain { booking: {...}, qr_payload }
+    const bookingObj = data.booking ? { ...data.booking, qr_payload: data.qr_payload } : data;
+    setBookingResult(bookingObj);
     setSelectedSlot(null);
-    setGateQrPayload(data.qr_payload || '');
+    setGateQrPayload(bookingObj.qr_payload || '');
     setGateMessage({
       type: 'info',
       title: 'Reservation created',

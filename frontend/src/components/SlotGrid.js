@@ -2,7 +2,7 @@ import React from 'react';
 import LoadingSkeleton from './LoadingSkeleton';
 import SlotCard from './SlotCard';
 
-const SlotGrid = ({ slots, loading, onSlotClick, nearestSlotId }) => {
+const SlotGrid = ({ slots, loading, onSlotClick, nearestSlotId, adminMode = false }) => {
   if (loading) {
     return <LoadingSkeleton />;
   }
@@ -47,6 +47,7 @@ const SlotGrid = ({ slots, loading, onSlotClick, nearestSlotId }) => {
                   slot={slot}
                   onClick={() => onSlotClick(slot)}
                   isNearest={slot.slot_id === nearestSlotId}
+                  adminMode={adminMode}
                 />
               ))}
             </div>

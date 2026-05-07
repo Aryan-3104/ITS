@@ -36,11 +36,13 @@ def create_booking():
         booking_id = BookingService.create_booking(
             slot_id, driver_name, vehicle_number, vehicle_type, arrival_time
         )
-        
+
         qr_payload = generate_qr_payload(booking_id, vehicle_number)
-        
+
+        booking = BookingService.get_booking(booking_id)
+
         return jsonify({
-            "booking_id": booking_id,
+            "booking": booking.to_dict() if booking else None,
             "qr_payload": qr_payload,
             "slot_id": slot_id,
         }), 201
@@ -138,11 +140,13 @@ def walkin_booking():
         booking_id = BookingService.create_walkin_booking(
             slot_id, driver_name, vehicle_number, vehicle_type
         )
-        
+
         qr_payload = generate_qr_payload(booking_id, vehicle_number)
-        
+
+        booking = BookingService.get_booking(booking_id)
+
         return jsonify({
-            "booking_id": booking_id,
+            "booking": booking.to_dict() if booking else None,
             "qr_payload": qr_payload,
             "slot_id": slot_id,
         }), 201

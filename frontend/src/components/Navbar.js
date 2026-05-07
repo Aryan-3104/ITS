@@ -21,7 +21,7 @@ export default function Navbar() {
 
         <nav className="flex items-center gap-2">
           <NavLink 
-            to="/" 
+            to="/driver" 
             className="px-3 py-2 rounded-lg hover:bg-[--bg-elevated] transition text-[--text-muted] font-medium"
             style={({ isActive }) => isActive ? activeLinkStyle : undefined}
           >

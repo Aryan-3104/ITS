@@ -15,6 +15,48 @@ class BookingService:
     """Service for booking operations."""
 
     @staticmethod
+    def _normalize_vehicle_number(vehicle_number):
+        return vehicle_number.strip().upper()
+
+    @staticmethod
+    def _normalize_booking_status(status):
+        if isinstance(status, BookingStatus):
+            return status.value
+
+        if not status:
+            return BookingStatus.CONFIRMED.value
+
+        try:
+            return BookingStatus(status).value
+        except ValueError:
+            return BookingStatus[status.upper()].value
+
+    @staticmethod
+    def _slot_status_for_booking_status(status):
+        status_value = BookingStatus(status).value if not isinstance(status, BookingStatus) else status.value
+
+        if status_value == BookingStatus.CHECKED_IN.value:
+            return SlotStatus.OCCUPIED
+        if status_value == BookingStatus.COMPLETED.value:
+            return SlotStatus.AVAILABLE
+        if status_value in {BookingStatus.CANCELLED.value, BookingStatus.EXPIRED.value}:
+            return SlotStatus.AVAILABLE
+        return SlotStatus.RESERVED
+
+    @staticmethod
+    def get_booking_by_vehicle_number(vehicle_number):
+        """Get booking by vehicle number."""
+        normalized_vehicle_number = BookingService._normalize_vehicle_number(vehicle_number)
+        row = execute_query(
+            """SELECT booking_id, slot_id, driver_name, vehicle_number, vehicle_type,
+                      arrival_time, status, checkin_time, checkout_time, amount_charged
+               FROM bookings WHERE UPPER(vehicle_number) = ?""",
+            [normalized_vehicle_number],
+            fetch_one=True
+        )
+        return Booking.from_row(row) if row else None
+
+    @staticmethod
     def _build_checkout_bill(booking, slot, exit_time=None):
         """Build a checkout bill without mutating state."""
         checkin = datetime.fromisoformat(booking.checkin_time)
@@ -42,6 +84,8 @@ class BookingService:
     @staticmethod
     def create_booking(slot_id, driver_name, vehicle_number, vehicle_type, arrival_time):
         """Create a new booking."""
+        vehicle_number = BookingService._normalize_vehicle_number(vehicle_number)
+
         # Validate slot exists and is available
         slot = SlotService.get_slot(slot_id)
         if not slot:
@@ -49,6 +93,10 @@ class BookingService:
         
         if slot.status != SlotStatus.AVAILABLE:
             raise ValueError(f"Slot {slot_id} is not available")
+
+        existing_booking = BookingService.get_booking_by_vehicle_number(vehicle_number)
+        if existing_booking:
+            raise ValueError(f"Vehicle number {vehicle_number} already exists")
         
         # Create booking
         booking_id = str(uuid.uuid4())
@@ -73,6 +121,55 @@ class BookingService:
             
             conn.commit()
         
+        return booking_id
+
+    @staticmethod
+    def force_assign_booking(slot_id, driver_name, vehicle_number, vehicle_type, arrival_time, status=None, checkin_time=None, checkout_time=None, amount_charged=None):
+        """Create or replace a booking on any slot."""
+        vehicle_number = BookingService._normalize_vehicle_number(vehicle_number)
+        normalized_status = BookingService._normalize_booking_status(status)
+
+        slot = SlotService.get_slot(slot_id)
+        if not slot:
+            raise ValueError(f"Slot {slot_id} not found")
+
+        booking_id = str(uuid.uuid4())
+        slot_status = BookingService._slot_status_for_booking_status(normalized_status)
+
+        existing_booking = BookingService.get_booking_by_vehicle_number(vehicle_number)
+        if existing_booking and existing_booking.slot_id != slot_id:
+            raise ValueError(f"Vehicle number {vehicle_number} already exists")
+
+        with get_db() as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("DELETE FROM bookings WHERE slot_id = ?", (slot_id,))
+
+            cursor.execute("""
+                INSERT INTO bookings
+                (booking_id, slot_id, driver_name, vehicle_number, vehicle_type,
+                 arrival_time, status, checkin_time, checkout_time, amount_charged)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                booking_id,
+                slot_id,
+                driver_name,
+                vehicle_number,
+                vehicle_type,
+                arrival_time,
+                normalized_status,
+                checkin_time,
+                checkout_time,
+                amount_charged,
+            ))
+
+            cursor.execute(
+                "UPDATE slots SET status = ? WHERE slot_id = ?",
+                (slot_status, slot_id)
+            )
+
+            conn.commit()
+
         return booking_id
     
     @staticmethod
@@ -122,6 +219,24 @@ class BookingService:
             )
             
             conn.commit()
+
+    @staticmethod
+    def delete_booking(booking_id):
+        """Delete a booking and release its slot."""
+        booking = BookingService.get_booking(booking_id)
+        if not booking:
+            raise ValueError(f"Booking {booking_id} not found")
+
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM bookings WHERE booking_id = ?", (booking_id,))
+            cursor.execute(
+                "UPDATE slots SET status = ? WHERE slot_id = ?",
+                (SlotStatus.AVAILABLE, booking.slot_id)
+            )
+            conn.commit()
+
+        return booking.to_dict()
     
     @staticmethod
     def check_in(booking_id):
@@ -227,6 +342,8 @@ class BookingService:
     @staticmethod
     def create_walkin_booking(slot_id, driver_name, vehicle_number, vehicle_type):
         """Create a walk-in booking (immediate check-in)."""
+        vehicle_number = BookingService._normalize_vehicle_number(vehicle_number)
+
         # Validate slot is available
         slot = SlotService.get_slot(slot_id)
         if not slot:
@@ -234,6 +351,10 @@ class BookingService:
         
         if slot.status != SlotStatus.AVAILABLE:
             raise ValueError(f"Slot {slot_id} is not available")
+
+        existing_booking = BookingService.get_booking_by_vehicle_number(vehicle_number)
+        if existing_booking:
+            raise ValueError(f"Vehicle number {vehicle_number} already exists")
         
         booking_id = str(uuid.uuid4())
         now = datetime.utcnow().isoformat()
@@ -314,6 +435,16 @@ class BookingService:
                    arrival_time, status, checkin_time, checkout_time, amount_charged
             FROM bookings WHERE status = ?
         """, [status])
+        return [Booking.from_row(row) for row in rows]
+
+    @staticmethod
+    def get_bookings_by_slot(slot_id):
+        """Get bookings by slot id (useful for admin lookups)."""
+        rows = execute_query("""
+            SELECT booking_id, slot_id, driver_name, vehicle_number, vehicle_type,
+                   arrival_time, status, checkin_time, checkout_time, amount_charged
+            FROM bookings WHERE slot_id = ?
+        """, [slot_id])
         return [Booking.from_row(row) for row in rows]
 
 def generate_qr_payload(booking_id, vehicle_number):

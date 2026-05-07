@@ -8,6 +8,24 @@ from app.services.slot_service import SlotService
 
 class AnalyticsService:
     """Service for analytics queries."""
+
+    @staticmethod
+    def _build_series(rows, key_name, total_points):
+        result = {
+            label: {key_name: label, "sessions": 0, "revenue": 0.0}
+            for label in total_points
+        }
+
+        for row in rows:
+            label = row[0]
+            if label in result:
+                result[label] = {
+                    key_name: label,
+                    "sessions": row[1],
+                    "revenue": round(row[2], 2),
+                }
+
+        return list(result.values())
     
     @staticmethod
     def get_occupancy_rate():
@@ -85,6 +103,67 @@ class AnalyticsService:
         """, [BookingStatus.COMPLETED])
         
         return [{"vehicle_type": row[0], "count": row[1]} for row in rows]
+
+    @staticmethod
+    def get_sales_series(period="weekly"):
+        """Get sales data for weekly, monthly, or yearly views."""
+        period = (period or "weekly").lower()
+
+        if period == "yearly":
+            today = datetime.utcnow().date()
+            months = []
+            current = today.replace(day=1)
+            for _ in range(12):
+                months.append(current.strftime("%Y-%m"))
+                year = current.year - 1 if current.month == 1 else current.year
+                month = 12 if current.month == 1 else current.month - 1
+                current = current.replace(year=year, month=month)
+            months.reverse()
+
+            rows = execute_query("""
+                SELECT strftime('%Y-%m', checkout_time) as period_label,
+                       COUNT(*) as sessions,
+                       COALESCE(SUM(amount_charged), 0) as revenue
+                FROM bookings
+                WHERE status = ? AND checkout_time IS NOT NULL
+                      AND strftime('%Y-%m', checkout_time) IN ({})
+                GROUP BY period_label
+                ORDER BY period_label
+            """.format(",".join(["?"] * len(months))), [BookingStatus.COMPLETED, *months])
+
+            return AnalyticsService._build_series(rows, "month", months)
+
+        days = 7 if period == "weekly" else 30
+        end_date = datetime.utcnow().date()
+        start_date = end_date - timedelta(days=days - 1)
+        labels = [(start_date + timedelta(days=index)).isoformat() for index in range(days)]
+
+        rows = execute_query("""
+            SELECT DATE(checkout_time) as period_label,
+                   COUNT(*) as sessions,
+                   COALESCE(SUM(amount_charged), 0) as revenue
+            FROM bookings
+            WHERE status = ? AND checkout_time IS NOT NULL
+                  AND DATE(checkout_time) BETWEEN ? AND ?
+            GROUP BY period_label
+            ORDER BY period_label
+        """, [BookingStatus.COMPLETED, start_date.isoformat(), end_date.isoformat()])
+
+        return AnalyticsService._build_series(rows, "day", labels)
+
+    @staticmethod
+    def get_sales_summary(period="weekly"):
+        """Get aggregate sales for the selected period."""
+        series = AnalyticsService.get_sales_series(period)
+        total_revenue = round(sum(item["revenue"] for item in series), 2)
+        total_sessions = sum(item["sessions"] for item in series)
+
+        return {
+            "period": period,
+            "total_revenue": total_revenue,
+            "total_sessions": total_sessions,
+            "series": series,
+        }
     
     @staticmethod
     def get_session_log(limit=100, offset=0, date_from=None, date_to=None, vehicle_type=None):

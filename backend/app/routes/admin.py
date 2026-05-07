@@ -31,13 +31,73 @@ def check_admin_auth(f):
 @check_admin_auth
 def get_analytics():
     """Get analytics dashboard data."""
+    period = request.args.get("period", "weekly")
     return jsonify({
         "occupancy_rate": AnalyticsService.get_occupancy_rate(),
         "today_revenue": AnalyticsService.get_today_revenue(),
         "today_sessions": AnalyticsService.get_today_session_count(),
         "hourly_revenue": AnalyticsService.get_hourly_revenue(),
         "vehicle_type_breakdown": AnalyticsService.get_vehicle_type_breakdown(),
+        "sales_summary": AnalyticsService.get_sales_summary(period),
+        "sales_series": AnalyticsService.get_sales_series(period),
     })
+
+@admin_bp.route("/bookings", methods=["GET"])
+@check_admin_auth
+def get_bookings():
+    """Get all bookings for admin management."""
+    status = request.args.get("status")
+    slot_id = request.args.get("slot_id")
+
+    if slot_id:
+        bookings = BookingService.get_bookings_by_slot(slot_id)
+    elif status:
+        bookings = BookingService.get_bookings_by_status(status)
+    else:
+        bookings = BookingService.get_all_bookings()
+
+    return jsonify([booking.to_dict() for booking in bookings])
+
+@admin_bp.route("/bookings/force-assign", methods=["POST"])
+@check_admin_auth
+def force_assign_booking():
+    """Create or replace a booking on any slot."""
+    try:
+        data = request.json or {}
+        required_fields = ["slot_id", "driver_name", "vehicle_number", "vehicle_type", "arrival_time"]
+        if not all(data.get(field) for field in required_fields):
+            return jsonify({"error": "Missing required fields"}), 400
+
+        booking_id = BookingService.force_assign_booking(
+            slot_id=data["slot_id"],
+            driver_name=data["driver_name"],
+            vehicle_number=data["vehicle_number"],
+            vehicle_type=data["vehicle_type"],
+            arrival_time=data["arrival_time"],
+            status=data.get("status"),
+            checkin_time=data.get("checkin_time"),
+            checkout_time=data.get("checkout_time"),
+            amount_charged=data.get("amount_charged"),
+        )
+
+        booking = BookingService.get_booking(booking_id)
+        return jsonify({"booking": booking.to_dict(), "booking_id": booking_id}), 201
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@admin_bp.route("/bookings/<booking_id>", methods=["DELETE"])
+@check_admin_auth
+def delete_booking(booking_id):
+    """Delete any booking or log entry."""
+    try:
+        deleted = BookingService.delete_booking(booking_id)
+        return jsonify({"status": "deleted", "booking": deleted}), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @admin_bp.route("/slots/<slot_id>", methods=["PATCH"])
 @check_admin_auth

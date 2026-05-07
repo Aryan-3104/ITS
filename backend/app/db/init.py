@@ -27,7 +27,7 @@ def init_db():
             booking_id TEXT PRIMARY KEY,
             slot_id TEXT NOT NULL,
             driver_name TEXT NOT NULL,
-            vehicle_number TEXT NOT NULL,
+            vehicle_number TEXT NOT NULL UNIQUE,
             vehicle_type TEXT NOT NULL,
             arrival_time TEXT NOT NULL,
             status TEXT NOT NULL,
@@ -36,6 +36,11 @@ def init_db():
             amount_charged REAL,
             FOREIGN KEY (slot_id) REFERENCES slots(slot_id)
         )
+    """)
+
+    cursor.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_vehicle_number
+        ON bookings(vehicle_number)
     """)
     
     # Create occupancy_history table
