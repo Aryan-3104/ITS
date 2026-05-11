@@ -6,6 +6,7 @@ import {
   getBookings,
   forceAssignBooking,
   deleteBooking,
+  pruneBookings,
   setAdminToken,
   getRates,
   updateRate,
@@ -44,6 +45,7 @@ const formatSalesLabel = (value, period) => {
 };
 
 function AdminPage() {
+  const LOG_PAGE_LIMIT = 200;
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [analytics, setAnalytics] = useState(null);
@@ -54,6 +56,7 @@ function AdminPage() {
   const [salesPeriod, setSalesPeriod] = useState('weekly');
   const [bookingDraft, setBookingDraft] = useState(createBookingDraft());
   const [loading, setLoading] = useState(false);
+  const [logsLoading, setLogsLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
@@ -78,12 +81,15 @@ function AdminPage() {
   };
 
   const fetchBookings = async () => {
+    setLogsLoading(true);
     try {
-      const response = await getBookings();
-      setBookings(response.data);
+      const response = await getBookings({ limit: LOG_PAGE_LIMIT, offset: 0 });
+      setBookings(response.data || []);
       setError('');
     } catch (err) {
       setError('Failed to fetch bookings');
+    } finally {
+      setLogsLoading(false);
     }
   };
 
@@ -156,7 +162,9 @@ function AdminPage() {
     if (slot.status !== 'available') {
       try {
         const resp = await getBookings({ slot_id: slot.slot_id });
-        const existing = (resp.data && resp.data.length) ? resp.data[0] : null;
+        const activeStatuses = new Set(['checked_in', 'reserved', 'confirmed']);
+        const rows = Array.isArray(resp.data) ? resp.data : [];
+        const existing = rows.find((item) => activeStatuses.has(item.status)) || null;
         if (existing) {
           setBookingDraft({
             slot_id: existing.slot_id,
@@ -173,6 +181,9 @@ function AdminPage() {
           setMessage(`Loaded current booking for ${slot.slot_id}. Edit and Save to replace.`);
           return;
         }
+
+        setMessage(`Selected ${slot.slot_id}. No active booking details found, so the form is blank.`);
+        return;
       } catch (err) {
         // fall back to basic selection
         setError('Failed to load existing booking details');
@@ -221,6 +232,21 @@ function AdminPage() {
       await fetchBookings();
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to delete booking');
+    }
+  };
+
+  const handlePruneLogs = async () => {
+    const confirmed = window.confirm('Delete older completed logs and keep only the latest 5000 entries?');
+    if (!confirmed) return;
+
+    try {
+      const response = await pruneBookings(5000);
+      setMessage(`Deleted ${response.data?.deleted ?? 0} old completed log entries.`);
+      setError('');
+      await fetchBookings();
+      await fetchAnalytics(salesPeriod);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to trim old logs');
     }
   };
 
@@ -322,6 +348,9 @@ function AdminPage() {
 
   const salesSeries = analytics?.sales_summary?.series || analytics?.sales_series || [];
   const salesLabelKey = salesPeriod === 'yearly' ? 'month' : 'day';
+  const occupancySeries = analytics?.occupancy_series || [];
+  const occupancyLabelKey = salesPeriod === 'yearly' ? 'month' : 'day';
+  const hourlyVehicleFlow = analytics?.hourly_vehicle_flow || [];
 
   return (
     <div className="min-h-screen">
@@ -375,7 +404,7 @@ function AdminPage() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <h2 className="text-3xl font-display font-bold text-[--text-primary]">Live Metrics</h2>
-                <p className="text-[--text-muted] text-sm mt-1">Switch between weekly, monthly, and yearly sales views.</p>
+                <p className="text-[--text-muted] text-sm mt-1">Switch between weekly, monthly, and yearly sales and occupancy views.</p>
               </div>
               <div className="flex gap-2 flex-wrap">
                 {['weekly', 'monthly', 'yearly'].map((period) => (
@@ -395,7 +424,7 @@ function AdminPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <StatCard title="Occupancy Rate" value={`${analytics.occupancy_rate}%`} trend="current" />
+              <StatCard title="Occupancy Rate" value={`${analytics.occupancy_rate}%`} trend="current occupancy" />
               <StatCard title={`${salesPeriod.charAt(0).toUpperCase() + salesPeriod.slice(1)} Sales`} value={`₹${analytics.sales_summary?.total_revenue ?? 0}`} trend="revenue" />
               <StatCard title={`${salesPeriod.charAt(0).toUpperCase() + salesPeriod.slice(1)} Sessions`} value={analytics.sales_summary?.total_sessions ?? 0} trend="transactions" />
             </div>
@@ -421,17 +450,43 @@ function AdminPage() {
                 </ResponsiveContainer>
               </ChartSection>
 
-              <ChartSection title="Hourly Revenue Trend">
+              <ChartSection title="Hourly Vehicle Flow">
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={analytics.hourly_revenue}>
+                  <BarChart data={hourlyVehicleFlow}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                     <XAxis dataKey="hour" stroke="var(--text-muted)" />
                     <YAxis stroke="var(--text-muted)" />
                     <Tooltip
                       contentStyle={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}
                       labelStyle={{ color: 'var(--text-primary)' }}
+                      formatter={(value, name) => [value, name === 'entries' ? 'Entries' : 'Exits']}
                     />
-                    <Bar dataKey="revenue" fill="var(--accent-green)" radius={[8, 8, 0, 0]} />
+                    <Bar dataKey="entries" fill="var(--accent-blue)" radius={[8, 8, 0, 0]} />
+                    <Bar dataKey="exits" fill="var(--accent-amber)" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartSection>
+
+              <ChartSection title={`${salesPeriod.charAt(0).toUpperCase() + salesPeriod.slice(1)} Occupancy Trend`}>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={occupancySeries}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis
+                      dataKey={occupancyLabelKey}
+                      stroke="var(--text-muted)"
+                      tickFormatter={(value) => formatSalesLabel(value, salesPeriod)}
+                    />
+                    <YAxis
+                      stroke="var(--text-muted)"
+                      tickFormatter={(value) => `${Math.round(Number(value) || 0)}%`}
+                    />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+                      labelStyle={{ color: 'var(--text-primary)' }}
+                      labelFormatter={(value) => formatSalesLabel(value, salesPeriod)}
+                      formatter={(value) => [`${Math.round(Number(value) || 0)}%`, 'Occupancy']}
+                    />
+                    <Bar dataKey="occupancy_pct" fill="var(--accent-amber)" radius={[8, 8, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </ChartSection>
@@ -612,19 +667,34 @@ function AdminPage() {
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <div>
                 <h2 className="text-3xl font-display font-bold text-[--text-primary]">Logs</h2>
-                <p className="text-[--text-muted] text-sm mt-1">All booking entries are editable through delete and force-assign actions.</p>
+                <p className="text-[--text-muted] text-sm mt-1">Showing latest {LOG_PAGE_LIMIT} entries. Older completed entries can be trimmed.</p>
               </div>
-              <button
-                type="button"
-                onClick={fetchBookings}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[--border] bg-[--bg-surface] text-[--text-muted] hover:text-[--text-primary]"
-              >
-                <RefreshCcw size={16} />
-                Refresh
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePruneLogs}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-500/40 bg-red-500/10 text-red-300 hover:text-red-200"
+                >
+                  <Trash2 size={16} />
+                  Trim Old Logs
+                </button>
+                <button
+                  type="button"
+                  onClick={fetchBookings}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[--border] bg-[--bg-surface] text-[--text-muted] hover:text-[--text-primary]"
+                >
+                  <RefreshCcw size={16} />
+                  Refresh
+                </button>
+              </div>
             </div>
 
             <div className="bg-[--bg-surface] border border-[--border] rounded-xl overflow-hidden">
+              {logsLoading && (
+                <div className="px-4 py-6 text-[--text-muted] text-sm border-b border-[--border]">
+                  Loading booking logs...
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -641,7 +711,7 @@ function AdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {bookings.length === 0 ? (
+                    {!logsLoading && bookings.length === 0 ? (
                       <tr>
                         <td colSpan="9" className="px-4 py-10 text-center text-[--text-muted]">
                           No records yet.

@@ -1,7 +1,7 @@
 import React from 'react';
 
 const SlotCard = ({ slot, onClick, isNearest, adminMode = false }) => {
-  const { slot_id, status } = slot;
+  const { slot_id, status, category, rate_per_hour } = slot;
 
   const statusStyles = {
     available: {
@@ -43,12 +43,12 @@ const SlotCard = ({ slot, onClick, isNearest, adminMode = false }) => {
       onClick={() => {
         if ((adminMode || status === 'available') && onClick) onClick(slot);
       }}
-      className={`relative w-full h-[96px] flex flex-col items-center justify-between rounded-lg border transition-all duration-300 overflow-hidden min-w-0 p-3
+      className={`relative w-full h-[120px] flex flex-col items-center justify-between rounded-lg border transition-all duration-300 overflow-hidden min-w-0 p-3
         ${styles.bg} ${styles.text} ${styles.border} ${styles.hover}
         ${glowColor}
         focus:outline-none focus:ring-2 focus:ring-[--accent-blue]
       `}
-      aria-label={`Slot ${slot_id}, ${status}, ${slot.category}`}
+      aria-label={`Slot ${slot_id}, ${status}, ${category}, ₹${rate_per_hour}/hr`}
       disabled={!adminMode && status !== 'available'}
     >
       {isNearest && status === 'available' && (
@@ -57,15 +57,18 @@ const SlotCard = ({ slot, onClick, isNearest, adminMode = false }) => {
           <span className="relative inline-flex rounded-full h-3 w-3 bg-[--accent-blue]"></span>
         </span>
       )}
-      <div className="font-display font-bold text-xl leading-none">{slot_id.split('-')[1]}</div>
+      <div className="font-display font-bold text-lg leading-none">{slot_id.split('-')[1]}</div>
       <div className="w-full flex justify-center">
         <span
           className="uppercase tracking-widest font-medium mt-1 truncate px-2 py-0.5 rounded-full bg-[rgba(255,255,255,0.03)] text-[--text-muted]"
-          style={{ fontSize: '10px', lineHeight: '12px', display: 'inline-block', maxWidth: '100%' }}
+          style={{ fontSize: '9px', lineHeight: '11px', display: 'inline-block', maxWidth: '100%' }}
         >
           {status}
         </span>
       </div>
+      {rate_per_hour && status === 'available' && (
+        <div className="text-xs font-semibold text-[--accent-blue] mt-1">₹{rate_per_hour}/hr</div>
+      )}
     </button>
   );
 };

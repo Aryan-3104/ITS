@@ -2,6 +2,11 @@
 Flask application factory and main entry point.
 """
 import os
+import sys
+
+if __package__ is None or __package__ == "":
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from flask import Flask
 from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -9,6 +14,7 @@ from app.db.init import init_db
 from app.db.seed import seed_db, seed_rate_settings
 from app.routes.public import public_bp
 from app.routes.admin import admin_bp
+from app.routes.debug import debug_bp
 from app.jobs.auto_release import auto_release_job
 
 def create_app():
@@ -31,6 +37,8 @@ def create_app():
     # Register blueprints
     app.register_blueprint(public_bp)
     app.register_blueprint(admin_bp)
+    # Debug routes (local dev only)
+    app.register_blueprint(debug_bp)
     
     # Set up background scheduler
     scheduler = BackgroundScheduler()

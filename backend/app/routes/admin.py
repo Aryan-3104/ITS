@@ -37,6 +37,8 @@ def get_analytics():
         "today_revenue": AnalyticsService.get_today_revenue(),
         "today_sessions": AnalyticsService.get_today_session_count(),
         "hourly_revenue": AnalyticsService.get_hourly_revenue(),
+        "hourly_vehicle_flow": AnalyticsService.get_hourly_vehicle_flow(),
+        "occupancy_series": AnalyticsService.get_occupancy_series(period),
         "vehicle_type_breakdown": AnalyticsService.get_vehicle_type_breakdown(),
         "sales_summary": AnalyticsService.get_sales_summary(period),
         "sales_series": AnalyticsService.get_sales_series(period),
@@ -48,15 +50,34 @@ def get_bookings():
     """Get all bookings for admin management."""
     status = request.args.get("status")
     slot_id = request.args.get("slot_id")
+    limit = request.args.get("limit", 200, type=int)
+    offset = request.args.get("offset", 0, type=int)
+
+    if limit is None:
+        limit = 200
+    limit = max(1, min(limit, 500))
+    offset = max(0, offset or 0)
 
     if slot_id:
         bookings = BookingService.get_bookings_by_slot(slot_id)
-    elif status:
-        bookings = BookingService.get_bookings_by_status(status)
     else:
-        bookings = BookingService.get_all_bookings()
+        bookings = BookingService.get_bookings(limit=limit, offset=offset, status=status)
 
     return jsonify([booking.to_dict() for booking in bookings])
+
+@admin_bp.route("/bookings/prune", methods=["POST"])
+@check_admin_auth
+def prune_bookings():
+    """Delete older completed booking logs while keeping the most recent entries."""
+    try:
+        data = request.json or {}
+        keep_latest = data.get("keep_latest", 5000)
+        keep_latest = max(0, min(int(keep_latest), 50000))
+
+        deleted = BookingService.prune_completed_bookings(keep_latest=keep_latest)
+        return jsonify({"status": "ok", "deleted": deleted, "kept": keep_latest}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @admin_bp.route("/bookings/force-assign", methods=["POST"])
 @check_admin_auth
@@ -167,7 +188,7 @@ def get_rates():
 @admin_bp.route("/rates/<vehicle_type>", methods=["PATCH"])
 @check_admin_auth
 def update_rate(vehicle_type):
-    """Update billing rules for a vehicle type."""
+    """Update billing rules for a vehicle type and sync to all slots."""
     try:
         data = request.json or {}
         min_charge = data.get("min_charge")
@@ -176,7 +197,12 @@ def update_rate(vehicle_type):
         if min_charge is None or hourly_rate is None:
             return jsonify({"error": "Missing min_charge or hourly_rate"}), 400
 
+        # Update the rate settings in the database
         updated = RateService.upsert_rate_setting(vehicle_type, float(min_charge), float(hourly_rate))
+        
+        # Sync the new rate to all slots with this category
+        SlotService.update_all_slots_rate_by_category(vehicle_type, float(hourly_rate))
+        
         return jsonify(updated), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500

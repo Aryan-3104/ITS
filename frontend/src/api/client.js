@@ -75,6 +75,10 @@ export const deleteBooking = (bookingId) => {
   return api.delete(`/admin/bookings/${bookingId}`);
 };
 
+export const pruneBookings = (keepLatest = 5000) => {
+  return api.post('/admin/bookings/prune', { keep_latest: keepLatest });
+};
+
 export const updateSlot = (slotId, data) => {
   return api.patch(`/admin/slots/${slotId}`, data);
 };

@@ -4,8 +4,7 @@ Database helper for SQLite operations.
 import sqlite3
 import os
 from contextlib import contextmanager
-
-DB_PATH = os.getenv("DATABASE_URL", "sqlite:///./parksmart.db").replace("sqlite:///", "")
+from app.db.path import DB_PATH
 
 @contextmanager
 def get_db():

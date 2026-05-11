@@ -61,20 +61,35 @@ class AnalyticsService:
     
     @staticmethod
     def get_hourly_revenue(date_str=None):
-        """Get revenue by hour for a given date."""
-        if not date_str:
-            date_str = datetime.utcnow().date().isoformat()
-        
-        rows = execute_query("""
-            SELECT 
-                CAST(strftime('%H', checkout_time) AS INTEGER) as hour,
-                COUNT(*) as sessions,
-                COALESCE(SUM(amount_charged), 0) as revenue
-            FROM bookings
-            WHERE status = ? AND checkout_time LIKE ?
-            GROUP BY hour
-            ORDER BY hour
-        """, [BookingStatus.COMPLETED, f"{date_str}%"])
+        """Get revenue by hour of day.
+
+        If a date is supplied, report that day. Otherwise use the entire
+        completed-booking history so the dashboard shows a stable peak-hour
+        pattern instead of only today's sparse data.
+        """
+        params = [BookingStatus.COMPLETED]
+        if date_str:
+            rows = execute_query("""
+                SELECT 
+                    CAST(strftime('%H', checkout_time) AS INTEGER) as hour,
+                    COUNT(*) as sessions,
+                    COALESCE(SUM(amount_charged), 0) as revenue
+                FROM bookings
+                WHERE status = ? AND checkout_time LIKE ?
+                GROUP BY hour
+                ORDER BY hour
+            """, [BookingStatus.COMPLETED, f"{date_str}%"])
+        else:
+            rows = execute_query("""
+                SELECT 
+                    CAST(strftime('%H', checkout_time) AS INTEGER) as hour,
+                    COUNT(*) as sessions,
+                    COALESCE(SUM(amount_charged), 0) as revenue
+                FROM bookings
+                WHERE status = ? AND checkout_time IS NOT NULL
+                GROUP BY hour
+                ORDER BY hour
+            """, params)
         
         # Fill missing hours with 0
         result = {}
@@ -90,6 +105,43 @@ class AnalyticsService:
             }
         
         return sorted(result.values(), key=lambda x: x["hour"])
+
+    @staticmethod
+    def get_hourly_vehicle_flow():
+        """Get hourly vehicle entries and exits across all completed bookings.
+
+        Arrival time is treated as a vehicle entering the lot and checkout time
+        as a vehicle leaving the lot.
+        """
+        rows = execute_query("""
+            SELECT
+                CAST(strftime('%H', arrival_time) AS INTEGER) as hour,
+                COUNT(*) as entries
+            FROM bookings
+            WHERE arrival_time IS NOT NULL
+            GROUP BY hour
+            ORDER BY hour
+        """)
+
+        exits_rows = execute_query("""
+            SELECT
+                CAST(strftime('%H', checkout_time) AS INTEGER) as hour,
+                COUNT(*) as exits
+            FROM bookings
+            WHERE checkout_time IS NOT NULL AND status = ?
+            GROUP BY hour
+            ORDER BY hour
+        """, [BookingStatus.COMPLETED])
+
+        result = {i: {"hour": i, "entries": 0, "exits": 0} for i in range(24)}
+
+        for row in rows:
+            result[row[0]]["entries"] = row[1]
+
+        for row in exits_rows:
+            result[row[0]]["exits"] = row[1]
+
+        return sorted(result.values(), key=lambda x: x["hour"])
     
     @staticmethod
     def get_vehicle_type_breakdown():
@@ -103,6 +155,71 @@ class AnalyticsService:
         """, [BookingStatus.COMPLETED])
         
         return [{"vehicle_type": row[0], "count": row[1]} for row in rows]
+
+    @staticmethod
+    def get_occupancy_series(period="weekly"):
+        """Get occupancy trend data grouped by day or month.
+
+        Returns occupancy percentage plus estimated occupied slot count so the
+        dashboard can show which dates were busiest.
+        """
+        period = (period or "weekly").lower()
+        total_slots = SlotService.get_total_slots()
+
+        if period == "yearly":
+            today = datetime.utcnow().date()
+            months = []
+            current = today.replace(day=1)
+            for _ in range(12):
+                months.append(current.strftime("%Y-%m"))
+                year = current.year - 1 if current.month == 1 else current.year
+                month = 12 if current.month == 1 else current.month - 1
+                current = current.replace(year=year, month=month)
+            months.reverse()
+
+            rows = execute_query("""
+                SELECT strftime('%Y-%m', snapshot_time) as period_label,
+                       ROUND(AVG(occupancy_pct), 2) as avg_occupancy
+                FROM occupancy_history
+                WHERE strftime('%Y-%m', snapshot_time) IN ({})
+                GROUP BY period_label
+                ORDER BY period_label
+            """.format(",".join(["?"] * len(months))), months)
+
+            series = []
+            row_map = {row[0]: row[1] for row in rows}
+            for month in months:
+                avg_pct = float(row_map.get(month, 0) or 0)
+                series.append({
+                    "month": month,
+                    "occupancy_pct": round(avg_pct, 2),
+                    "occupied_slots": round((avg_pct / 100.0) * total_slots, 1),
+                })
+            return series
+
+        days = 7 if period == "weekly" else 30
+        end_date = datetime.utcnow().date()
+        start_date = end_date - timedelta(days=days - 1)
+        labels = [(start_date + timedelta(days=index)).isoformat() for index in range(days)]
+
+        rows = execute_query("""
+            SELECT DATE(snapshot_time) as period_label,
+                   ROUND(AVG(occupancy_pct), 2) as avg_occupancy
+            FROM occupancy_history
+            WHERE DATE(snapshot_time) BETWEEN ? AND ?
+            GROUP BY period_label
+            ORDER BY period_label
+        """, [start_date.isoformat(), end_date.isoformat()])
+
+        row_map = {row[0]: row[1] for row in rows}
+        return [
+            {
+                "day": label,
+                "occupancy_pct": round(float(row_map.get(label, 0) or 0), 2),
+                "occupied_slots": round(((float(row_map.get(label, 0) or 0)) / 100.0) * total_slots, 1),
+            }
+            for label in labels
+        ]
 
     @staticmethod
     def get_sales_series(period="weekly"):

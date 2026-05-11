@@ -3,12 +3,18 @@ Database seeding: populate initial slots and historical occupancy data.
 """
 import sqlite3
 import os
+import sys
 from datetime import datetime, timedelta
+import math
+import random
+
+if __package__ is None or __package__ == "":
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 from app.config import (
     SlotCategory, SlotStatus, DEFAULT_RATES, SLOTS_LAYOUT, TOTAL_SLOTS
 )
-
-DB_PATH = os.getenv("DATABASE_URL", "sqlite:///./parksmart.db").replace("sqlite:///", "")
+from app.db.path import DB_PATH
 
 DEFAULT_BILLING_RULES = {
     SlotCategory.TWO_WHEELER: {"min_charge": 25.0, "hourly_rate": 20.0},
@@ -72,54 +78,105 @@ def seed_slots():
     conn.close()
     print(f"Seeded {TOTAL_SLOTS} slots (with {len(occupied_slots)} pre-occupied for demo)")
 
-def seed_occupancy_history():
-    """Generate simulated 30-day occupancy history for peak hour prediction."""
+def seed_occupancy_history(days=30, random_seed=None):
+    """Generate simulated occupancy history for a configurable number of days.
+
+    Adds realistic hourly patterns with weekly, monthly and yearly seasonality
+    and small random noise so trends (weekly/monthly/yearly) can be observed.
+    """
+    if random_seed is not None:
+        random.seed(random_seed)
+
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    
+
     # Clear existing history
     cursor.execute("DELETE FROM occupancy_history")
-    
-    # Generate 30 days of hourly data (simulated)
+
     end_date = datetime.utcnow()
-    start_date = end_date - timedelta(days=30)
-    
-    # Simulated occupancy curves by hour of day (more realistic pattern)
+    start_date = end_date - timedelta(days=days)
+
+    # Base occupancy by hour of day (daily pattern)
     occupancy_by_hour = {
         0: 5, 1: 3, 2: 2, 3: 2, 4: 3, 5: 8,
         6: 15, 7: 35, 8: 65, 9: 80, 10: 85, 11: 88,
         12: 90, 13: 85, 14: 75, 15: 70, 16: 72, 17: 78,
         18: 92, 19: 88, 20: 75, 21: 60, 22: 40, 23: 20,
     }
-    
+
+    total_hours = int((end_date - start_date).total_seconds() // 3600)
     current = start_date
+    hour_index = 0
     while current < end_date:
         hour = current.hour
-        day_of_week = current.weekday()
-        occupancy_pct = occupancy_by_hour.get(hour, 50)
-        
-        # Add some variation based on day of week (weekends slightly less busy)
-        if day_of_week >= 5:  # Saturday, Sunday
-            occupancy_pct = max(5, occupancy_pct - 10)
-        
+        day_of_week = current.weekday()  # 0=Mon .. 6=Sun
+
+        # Daily pattern
+        base = occupancy_by_hour.get(hour, 50)
+
+        # Weekly pattern: slightly higher on weekdays, lower on weekends
+        weekly = -10 if day_of_week >= 5 else 0
+
+        # Monthly seasonality (approx): a slow sinus wave over ~30 days
+        days_since_start = (current - start_date).days
+        monthly = 6 * math.sin(2 * math.pi * days_since_start / 30)
+
+        # Yearly seasonality (approx): slow sinus over 365 days
+        yearly = 8 * math.sin(2 * math.pi * days_since_start / 365)
+
+        # Trend component: small upward or downward trend across the seeded range
+        trend = 0.02 * (days_since_start) / max(1, days)
+
+        # Random noise
+        noise = random.gauss(0, 3)
+
+        occupancy_pct = base + weekly + monthly + yearly + (base * trend) + noise
+        occupancy_pct = max(0, min(100, round(occupancy_pct, 1)))
+
         snapshot_time = current.isoformat()
-        
-        cursor.execute("""
+
+        cursor.execute(
+            """
             INSERT INTO occupancy_history (snapshot_time, day_of_week, hour, occupancy_pct)
             VALUES (?, ?, ?, ?)
-        """, (snapshot_time, day_of_week, hour, occupancy_pct))
-        
+            """,
+            (snapshot_time, day_of_week, hour, occupancy_pct),
+        )
+
         current += timedelta(hours=1)
-    
+        hour_index += 1
+
     conn.commit()
     conn.close()
-    print(f"Seeded occupancy history for 30 days")
+    print(f"Seeded occupancy history for {days} days ({total_hours} hourly snapshots)")
 
 def seed_db():
     """Run all seeding routines."""
     seed_rate_settings()
     seed_slots()
+    # Default to 30 days but allow override via env or CLI in __main__
     seed_occupancy_history()
 
 if __name__ == "__main__":
-    seed_db()
+    # Allow running the seeder with a custom number of days, e.g.
+    # python seed.py 365
+    import sys
+
+    days = 30
+    if len(sys.argv) > 1:
+        try:
+            days = int(sys.argv[1])
+        except ValueError:
+            print("Invalid days argument, using default 30")
+
+    # Optional second arg: random seed for reproducibility
+    rand_seed = None
+    if len(sys.argv) > 2:
+        try:
+            rand_seed = int(sys.argv[2])
+        except ValueError:
+            rand_seed = None
+
+    seed_rate_settings()
+    seed_slots()
+    seed_occupancy_history(days=days, random_seed=rand_seed)

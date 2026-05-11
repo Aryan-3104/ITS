@@ -9,7 +9,7 @@ from app.models import Booking
 from app.config import BookingStatus, SlotStatus, DEFAULT_HOLD_WINDOW
 from app.services.db_helper import execute_query, execute_update, get_db
 from app.services.slot_service import SlotService
-from app.services.rate_service import RateService, DEFAULT_RATE_SETTINGS
+from app.services.rate_service import RateService
 
 class BookingService:
     """Service for booking operations."""
@@ -58,13 +58,20 @@ class BookingService:
 
     @staticmethod
     def _build_checkout_bill(booking, slot, exit_time=None):
-        """Build a checkout bill without mutating state."""
+        """Build a checkout bill using the slot's stored rate (source of truth)."""
         checkin = datetime.fromisoformat(booking.checkin_time)
         checkout = exit_time or datetime.utcnow()
         duration_hours = max((checkout - checkin).total_seconds() / 3600, 0)
-        rate_setting = RateService.get_rate_settings(booking.vehicle_type) or DEFAULT_RATE_SETTINGS.get(booking.vehicle_type, {"min_charge": 25.0, "hourly_rate": 20.0})
-        raw_amount = duration_hours * rate_setting["hourly_rate"]
-        amount_charged = round(max(rate_setting["min_charge"], raw_amount), 2)
+        
+        # Use the slot's rate_per_hour as the authoritative rate for this booking
+        hourly_rate = slot.rate_per_hour
+        
+        # Retrieve min_charge from RateService, or use a sensible default
+        rate_setting = RateService.get_rate_settings(booking.vehicle_type)
+        min_charge = rate_setting.get("min_charge", 25.0) if rate_setting else 25.0
+        
+        raw_amount = duration_hours * hourly_rate
+        amount_charged = round(max(min_charge, raw_amount), 2)
 
         return {
             "booking_id": booking.booking_id,
@@ -76,8 +83,8 @@ class BookingService:
             "checkin_time": booking.checkin_time,
             "checkout_time": checkout.isoformat(),
             "duration_hours": round(duration_hours, 2),
-            "rate_per_hour": rate_setting["hourly_rate"],
-            "min_charge": rate_setting["min_charge"],
+            "rate_per_hour": hourly_rate,
+            "min_charge": min_charge,
             "amount_charged": amount_charged,
         }
     
@@ -424,7 +431,30 @@ class BookingService:
             SELECT booking_id, slot_id, driver_name, vehicle_number, vehicle_type,
                    arrival_time, status, checkin_time, checkout_time, amount_charged
             FROM bookings
+            ORDER BY COALESCE(checkout_time, checkin_time, arrival_time) DESC,
+                     arrival_time DESC
         """)
+        return [Booking.from_row(row) for row in rows]
+
+    @staticmethod
+    def get_bookings(limit=200, offset=0, status=None):
+        """Get paginated bookings with optional status filter."""
+        query = """
+            SELECT booking_id, slot_id, driver_name, vehicle_number, vehicle_type,
+                   arrival_time, status, checkin_time, checkout_time, amount_charged
+            FROM bookings
+        """
+        params = []
+
+        if status:
+            query += " WHERE status = ?"
+            params.append(status)
+
+        query += " ORDER BY COALESCE(checkout_time, checkin_time, arrival_time) DESC, arrival_time DESC"
+        query += " LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+
+        rows = execute_query(query, params)
         return [Booking.from_row(row) for row in rows]
     
     @staticmethod
@@ -434,6 +464,8 @@ class BookingService:
             SELECT booking_id, slot_id, driver_name, vehicle_number, vehicle_type,
                    arrival_time, status, checkin_time, checkout_time, amount_charged
             FROM bookings WHERE status = ?
+            ORDER BY COALESCE(checkout_time, checkin_time, arrival_time) DESC,
+                     arrival_time DESC
         """, [status])
         return [Booking.from_row(row) for row in rows]
 
@@ -444,8 +476,45 @@ class BookingService:
             SELECT booking_id, slot_id, driver_name, vehicle_number, vehicle_type,
                    arrival_time, status, checkin_time, checkout_time, amount_charged
             FROM bookings WHERE slot_id = ?
+            ORDER BY CASE status
+                WHEN 'checked_in' THEN 0
+                WHEN 'reserved' THEN 1
+                WHEN 'confirmed' THEN 2
+                WHEN 'completed' THEN 3
+                WHEN 'expired' THEN 4
+                WHEN 'cancelled' THEN 5
+                ELSE 6
+            END,
+            COALESCE(checkin_time, arrival_time) DESC,
+            arrival_time DESC
         """, [slot_id])
         return [Booking.from_row(row) for row in rows]
+
+    @staticmethod
+    def prune_completed_bookings(keep_latest=5000):
+        """Keep only the latest completed bookings and delete older completed rows."""
+        keep_latest = max(0, int(keep_latest))
+
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                DELETE FROM bookings
+                WHERE status = ?
+                  AND booking_id IN (
+                      SELECT booking_id
+                      FROM bookings
+                      WHERE status = ?
+                      ORDER BY checkout_time DESC
+                      LIMIT -1 OFFSET ?
+                  )
+                """,
+                (BookingStatus.COMPLETED, BookingStatus.COMPLETED, keep_latest),
+            )
+            deleted_count = cursor.rowcount
+            conn.commit()
+
+        return deleted_count
 
 def generate_qr_payload(booking_id, vehicle_number):
     """Generate QR code payload."""

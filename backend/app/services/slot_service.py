@@ -108,3 +108,11 @@ class SlotService:
         total = SlotService.get_total_slots()
         occupied = SlotService.get_occupancy_count()
         return round((occupied / total * 100) if total > 0 else 0, 2)
+    
+    @staticmethod
+    def update_all_slots_rate_by_category(category, new_rate):
+        """Update the rate for all slots of a given category."""
+        execute_update(
+            "UPDATE slots SET rate_per_hour = ? WHERE category = ?",
+            [new_rate, category]
+        )

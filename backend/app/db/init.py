@@ -2,9 +2,7 @@
 Database initialization: schema creation.
 """
 import sqlite3
-import os
-
-DB_PATH = os.getenv("DATABASE_URL", "sqlite:///./parksmart.db").replace("sqlite:///", "")
+from app.db.path import DB_PATH
 
 def init_db():
     """Create database schema if it doesn't exist."""
@@ -39,8 +37,23 @@ def init_db():
     """)
 
     cursor.execute("""
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_vehicle_number
+        CREATE INDEX IF NOT EXISTS idx_bookings_vehicle_number
         ON bookings(vehicle_number)
+    """)
+
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_bookings_status_checkout
+        ON bookings(status, checkout_time DESC)
+    """)
+
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_bookings_recent_activity
+        ON bookings(COALESCE(checkout_time, checkin_time, arrival_time) DESC, arrival_time DESC)
+    """)
+
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_bookings_slot_status
+        ON bookings(slot_id, status)
     """)
     
     # Create occupancy_history table
