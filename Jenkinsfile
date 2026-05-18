@@ -64,7 +64,7 @@ pipeline {
 */
         stage('Trivy Scan') {
             steps {
-                bat 'trivy fs . > trivy-report.txt'
+                bat '"C:\\Users\\agarw\\AppData\\Local\\Microsoft\\WinGet\\Packages\\AquaSecurity.Trivy_Microsoft.Winget.Source_8wekyb3d8bbwe\\trivy.exe" fs . > trivy-report.txt'
             }
         }
 
