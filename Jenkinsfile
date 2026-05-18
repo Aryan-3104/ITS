@@ -42,12 +42,25 @@ pipeline {
         }
 
         stage('SonarCloud Analysis') {
-            steps {
-                withSonarQubeEnv('sonarcloud') {
-                    bat 'sonar-scanner'
-                }
+    steps {
+        script {
+
+            def scannerHome = tool 'sonar-scanner'
+
+            withSonarQubeEnv('sonarcloud') {
+
+                bat """
+                ${scannerHome}\\bin\\sonar-scanner.bat ^
+                -Dsonar.projectKey=Aryan-3104_ITS ^
+                -Dsonar.organization=aryan-3104 ^
+                -Dsonar.sources=. ^
+                -Dsonar.host.url=https://sonarcloud.io ^
+                -Dsonar.token=%SONAR_AUTH_TOKEN%
+                """
             }
         }
+    }
+}
 
         stage('Trivy Scan') {
             steps {
