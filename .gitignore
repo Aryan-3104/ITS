@@ -51,9 +51,3 @@ Thumbs.db
 *.swo
 
 !backend/parksmart.db
-
-
-# Environment files
-.env
-.env.*
-!.env.example
