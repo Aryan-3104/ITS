@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ .
 
 # Copy database (optional)
-COPY parksmart.db /app/parksmart.db
+COPY backend/parksmart.db /app/parksmart.db
 # Set environment variable for Flask
 ENV FLASK_APP=app:create_app
 
