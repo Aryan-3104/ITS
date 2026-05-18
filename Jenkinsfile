@@ -41,26 +41,26 @@ pipeline {
             }
         }
 
-        stage('SonarCloud Analysis') {
-    steps {
-        script {
+//         stage('SonarCloud Analysis') {
+//     steps {
+//         script {
 
-            def scannerHome = tool 'sonar-scanner'
+//             def scannerHome = tool 'sonar-scanner'
 
-            withSonarQubeEnv('sonarcloud') {
+//             withSonarQubeEnv('sonarcloud') {
 
-                bat """
-                ${scannerHome}\\bin\\sonar-scanner.bat ^
-                -Dsonar.projectKey=Aryan-3104_ITS ^
-                -Dsonar.organization=aryan-3104 ^
-                -Dsonar.sources=. ^
-                -Dsonar.host.url=https://sonarcloud.io ^
-                -Dsonar.token=%SONAR_AUTH_TOKEN%
-                """
-            }
-        }
-    }
-}
+//                 bat """
+//                 ${scannerHome}\\bin\\sonar-scanner.bat ^
+//                 -Dsonar.projectKey=Aryan-3104_ITS ^
+//                 -Dsonar.organization=aryan-3104 ^
+//                 -Dsonar.sources=. ^
+//                 -Dsonar.host.url=https://sonarcloud.io ^
+//                 -Dsonar.token=%SONAR_AUTH_TOKEN%
+//                 """
+//             }
+//         }
+//     }
+// }
 
         stage('Trivy Scan') {
             steps {
