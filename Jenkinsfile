@@ -2,12 +2,12 @@ pipeline {
     agent any
 
     tools {
-        jdk 'jdk21'
-        nodejs 'node20'
+        jdk 'jdk23'
+        nodejs 'node24'
     }
 
     environment {
-        IMAGE_NAME = "YOUR_DOCKERHUB_USERNAME/its-app"
+        IMAGE_NAME = "aryan3101/its-app"
     }
 
     stages {
@@ -21,7 +21,7 @@ pipeline {
         stage('Clone Repository') {
             steps {
                 git branch: 'main',
-                url: 'https://github.com/YOUR_USERNAME/YOUR_REPO.git'
+                url: 'https://github.com/Aryan-3104/ITS.git'
             }
         }
 
