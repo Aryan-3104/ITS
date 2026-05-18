@@ -40,7 +40,7 @@ pipeline {
                 }
             }
         }
-
+/*
         stage('SonarCloud Analysis') {
     steps {
         script {
@@ -61,7 +61,7 @@ pipeline {
         }
     }
 }
-
+*/
         stage('Trivy Scan') {
             steps {
                 bat 'trivy fs . > trivy-report.txt'
