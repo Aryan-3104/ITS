@@ -50,6 +50,8 @@ Thumbs.db
 *.swp
 *.swo
 
+!backend/parksmart.db
+
 
 # Environment files
 .env
