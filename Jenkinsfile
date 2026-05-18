@@ -92,6 +92,12 @@ pipeline {
             }
         }
 
+        stage('Deploy Backend to Render') {
+            steps {
+                bat 'curl -X POST https://its-backend-egsg.onrender.com'
+            }
+        }
+
         stage('Deploy Frontend to Vercel') {
             steps {
                 dir('frontend') {
