@@ -41,32 +41,32 @@ pipeline {
             }
         }
 
-//         stage('SonarCloud Analysis') {
-//     steps {
-//         script {
+        stage('SonarCloud Analysis') {
+    steps {
+        script {
 
-//             def scannerHome = tool 'sonar-scanner'
+            def scannerHome = tool 'sonar-scanner'
 
-//             withSonarQubeEnv('sonarcloud') {
+            withSonarQubeEnv('sonarcloud') {
 
-//                 bat """
-//                 ${scannerHome}\\bin\\sonar-scanner.bat ^
-//                 -Dsonar.projectKey=Aryan-3104_ITS ^
-//                 -Dsonar.organization=aryan-3104 ^
-//                 -Dsonar.sources=. ^
-//                 -Dsonar.host.url=https://sonarcloud.io ^
-//                 -Dsonar.token=%SONAR_AUTH_TOKEN%
-//                 """
-//             }
-//         }
-//     }
-// }
+                bat """
+                ${scannerHome}\\bin\\sonar-scanner.bat ^
+                -Dsonar.projectKey=Aryan-3104_ITS ^
+                -Dsonar.organization=aryan-3104 ^
+                -Dsonar.sources=. ^
+                -Dsonar.host.url=https://sonarcloud.io ^
+                -Dsonar.token=%SONAR_AUTH_TOKEN%
+                """
+            }
+        }
+    }
+}
 
-        // stage('Trivy Scan') {
-        //     steps {
-        //         bat '"C:\\Users\\agarw\\AppData\\Local\\Microsoft\\WinGet\\Packages\\AquaSecurity.Trivy_Microsoft.Winget.Source_8wekyb3d8bbwe\\trivy.exe" fs . > trivy-report.txt'
-        //     }
-        // }
+        stage('Trivy Scan') {
+            steps {
+                bat '"C:\\Users\\agarw\\AppData\\Local\\Microsoft\\WinGet\\Packages\\AquaSecurity.Trivy_Microsoft.Winget.Source_8wekyb3d8bbwe\\trivy.exe" fs . > trivy-report.txt'
+            }
+        }
 
         stage('Build Docker Image') {
             steps {
