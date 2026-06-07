@@ -48,7 +48,7 @@ pipeline {
             def scannerHome = tool 'sonar-scanner'
 
             withSonarQubeEnv('sonarcloud') {
-
+                bat 'set SONAR'
                 bat """
                 ${scannerHome}\\bin\\sonar-scanner.bat ^
                 -Dsonar.projectKey=Aryan-3104_ITS ^
