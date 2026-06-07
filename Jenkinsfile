@@ -49,14 +49,13 @@ pipeline {
 
             withSonarQubeEnv('sonarcloud') {
 
-            bat """
-            ${scannerHome}\\bin\\sonar-scanner.bat ^
-            -Dsonar.projectKey=Aryan-3104_ITS ^
-            -Dsonar.organization=aryan-3104 ^
-            -Dsonar.sources=. ^
-            -Dsonar.host.url=https://sonarcloud.io
-            """
-            }
+                bat """
+                ${scannerHome}\\bin\\sonar-scanner.bat ^
+                -Dsonar.projectKey=Aryan-3104_ITS ^
+                -Dsonar.organization=aryan-3104 ^
+                -Dsonar.sources=. ^
+                -Dsonar.host.url=https://sonarcloud.io ^
+                """
             }
         }
     }
