@@ -55,7 +55,7 @@ pipeline {
                 -Dsonar.organization=aryan-3104 ^
                 -Dsonar.sources=. ^
                 -Dsonar.host.url=https://sonarcloud.io ^
-                -Dsonar.token=%SONAR_AUTH_TOKEN%
+                -Dsonar.token=%SONAR_TOKEN%
                 """
             }
         }
