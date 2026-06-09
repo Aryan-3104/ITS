@@ -93,7 +93,7 @@ pipeline {
 
         stage('Deploy Backend to Render') {
             steps {
-                bat 'curl -X POST https://its-backend-egsg.onrender.com'
+                bat 'curl -X POST https://api.render.com/deploy/srv-d85olqndl75s7393u5j0?key=Y4RPYjgw6Yk'
             }
         }
 
